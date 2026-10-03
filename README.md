@@ -12,7 +12,7 @@ Microservicio interno de EventoMax encargado de procesar trabajos/notificaciones
 ## Responsabilidad
 
 Este microservicio **no es público** (no expone API REST de negocio).
-Su única responsabilidad en este incremento es consumir comandos de notificación de email desde RabbitMQ y procesarlos de forma asíncrona.
+Su responsabilidad en este incremento es consumir comandos de notificación de email (`q.cmd.email`) y tickets de cuadrilla (`q.cmd.crew`) desde RabbitMQ y procesarlos de forma asíncrona.
 
 ---
 
@@ -147,12 +147,14 @@ Se limpia con `try/finally` al terminar cada mensaje para evitar contaminación 
 
 ## Variables de entorno
 
-| Variable | Descripción | Default (local) |
-|---|---|---|
-| `RABBITMQ_HOST` | Host de RabbitMQ | `localhost` |
-| `RABBITMQ_PORT` | Puerto de RabbitMQ | `5672` |
-| `RABBITMQ_USERNAME` | Usuario de RabbitMQ | `guest` |
-| `RABBITMQ_PASSWORD` | Contraseña de RabbitMQ | `guest` |
+| Variable | Descripción |
+|---|---|
+| `RABBITMQ_HOST` | Host de RabbitMQ |
+| `RABBITMQ_PORT` | Puerto de RabbitMQ |
+| `RABBITMQ_USERNAME` | Usuario de RabbitMQ |
+| `RABBITMQ_PASSWORD` | Contraseña de RabbitMQ |
+
+**Nota:** `application.yml` no define valores por defecto (ej. `guest`) para estas variables para evitar exposición. En entornos locales o Docker, deben proporcionarse mediante variables de entorno o archivo `.env`.
 
 Ver `.env.example` para la configuración Docker.
 
@@ -216,6 +218,37 @@ RABBITMQ_PORT=5672
 RABBITMQ_USERNAME=<tu-usuario>
 RABBITMQ_PASSWORD=<tu-password>
 ```
+
+---
+
+## Producción / AWS
+
+- Notify se ejecuta en AWS EC2 mediante Docker.
+- Es un consumidor interno y NO es público.
+- No debe existir port mapping público.
+- RabbitMQ se alcanza mediante dirección privada/configurada con `RABBITMQ_HOST`.
+- No utilizar `localhost` ni `host.docker.internal` en cloud.
+- Credenciales mediante variables de entorno / mecanismo seguro.
+- Usa `docker-compose.prod.yml`.
+- Usa `.env.prod.example` únicamente como plantilla sin secretos.
+- Pertenece a `eventomax-net`.
+
+**Flujo conceptual:**
+
+```text
+ms-eventomax-productions
+        |
+        v
+RabbitMQ AWS
+   |          |
+   v          v
+q.cmd.email  q.cmd.crew
+   \          /
+    v        v
+ ms-eventomax-notify
+```
+
+Aclaración: RabbitMQ puede estar en infraestructura EC2 separada, pero la comunicación debe ocurrir mediante conectividad privada de AWS/VPC.
 
 ---
 

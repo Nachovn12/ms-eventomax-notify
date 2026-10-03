@@ -83,6 +83,15 @@ No se depende de headers Java personalizados del publisher.
 - **`requeue = false`** siempre en NACK → evita requeue infinito.
 - El mensaje rechazado va a la DLQ gracias a la DLX configurada en la infraestructura.
 
+### Retries controlados
+
+Se utiliza **Spring Retry** de forma programática.
+- **Intentos máximos:** 3 por defecto (`NOTIFY_RETRY_MAX_ATTEMPTS`).
+- **Backoff fijo:** 500 ms por defecto (`NOTIFY_RETRY_INITIAL_INTERVAL_MS`).
+- Si un intento funciona, se marca el evento como procesado y se ejecuta `basicAck`.
+- Si se agotan los intentos, el mensaje no se marca como procesado y recibe un `basicNack` con `requeue=false`, derivando el mensaje a la DLQ (`q.cmd.email.dlq`).
+- Mensajes con JSON inválido o tipo no soportado no se reintentan y van directo a DLQ.
+
 ---
 
 ## Idempotencia

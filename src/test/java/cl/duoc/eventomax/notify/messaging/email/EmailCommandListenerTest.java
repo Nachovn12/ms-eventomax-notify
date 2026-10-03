@@ -17,6 +17,9 @@ import org.springframework.amqp.core.MessageProperties;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import org.springframework.retry.support.RetryTemplate;
+import org.springframework.retry.policy.SimpleRetryPolicy;
+import org.springframework.retry.backoff.FixedBackOffPolicy;
 
 @ExtendWith(MockitoExtension.class)
 class EmailCommandListenerTest {
@@ -33,12 +36,23 @@ class EmailCommandListenerTest {
     private Channel channel;
 
     private ObjectMapper objectMapper;
+    private RetryTemplate retryTemplate;
     private EmailCommandListener listener;
 
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        listener = new EmailCommandListener(objectMapper, emailNotificationService, processedEventStore);
+
+        retryTemplate = new RetryTemplate();
+        SimpleRetryPolicy retryPolicy = new SimpleRetryPolicy();
+        retryPolicy.setMaxAttempts(3);
+        retryTemplate.setRetryPolicy(retryPolicy);
+
+        FixedBackOffPolicy backOffPolicy = new FixedBackOffPolicy();
+        backOffPolicy.setBackOffPeriod(0L); // No backoff para tests
+        retryTemplate.setBackOffPolicy(backOffPolicy);
+
+        listener = new EmailCommandListener(objectMapper, emailNotificationService, processedEventStore, retryTemplate);
     }
 
     private MessageEnvelope<EmailProductionStatusPayload> createValidEnvelope() {
@@ -157,19 +171,54 @@ class EmailCommandListenerTest {
         verify(channel).basicNack(DELIVERY_TAG, false, false);
     }
 
-    // --- E. ERROR DEL SERVICIO ---
+    // --- E. ERROR DEL SERVICIO Y REINTENTOS ---
 
     @Test
-    @DisplayName("E. Error del servicio: NACK sin marcar procesado")
-    void serviceError_shouldNackWithoutMarkingProcessed() throws Exception {
+    @DisplayName("E1. Falla en 3 intentos: NACK sin marcar procesado, exception propagada")
+    void serviceError_fails3Times_shouldNackWithoutMarkingProcessed() throws Exception {
         var envelope = createValidEnvelope();
         Message message = createMessage(envelope);
 
-        when(processedEventStore.processOnce(eq("evt-001"), any(Runnable.class))).thenThrow(new RuntimeException("Error simulado"));
+        // Simulamos que processOnce ejecuta el lambda pero la ejecución lanza exception las 3 veces
+        when(processedEventStore.processOnce(eq("evt-001"), any(Runnable.class))).thenAnswer(invocation -> {
+            Runnable processor = invocation.getArgument(1);
+            processor.run();
+            return true;
+        });
+
+        doThrow(new RuntimeException("Error simulado 1"))
+        .doThrow(new RuntimeException("Error simulado 2"))
+        .doThrow(new RuntimeException("Error simulado 3"))
+        .when(emailNotificationService).processEmailNotification(any());
 
         listener.handleEmailCommand(message, channel, DELIVERY_TAG);
 
+        verify(emailNotificationService, times(3)).processEmailNotification(any());
         verify(channel).basicNack(DELIVERY_TAG, false, false);
         verify(channel, never()).basicAck(anyLong(), anyBoolean());
+    }
+
+    @Test
+    @DisplayName("E2. Falla 2 veces y éxito en el tercer intento: ACK")
+    void serviceError_fails2TimesThenSucceeds_shouldAck() throws Exception {
+        var envelope = createValidEnvelope();
+        Message message = createMessage(envelope);
+
+        when(processedEventStore.processOnce(eq("evt-001"), any(Runnable.class))).thenAnswer(invocation -> {
+            Runnable processor = invocation.getArgument(1);
+            processor.run();
+            return true;
+        });
+
+        doThrow(new RuntimeException("Error simulado 1"))
+        .doThrow(new RuntimeException("Error simulado 2"))
+        .doNothing()
+        .when(emailNotificationService).processEmailNotification(any());
+
+        listener.handleEmailCommand(message, channel, DELIVERY_TAG);
+
+        verify(emailNotificationService, times(3)).processEmailNotification(any());
+        verify(channel).basicAck(DELIVERY_TAG, false);
+        verify(channel, never()).basicNack(anyLong(), anyBoolean(), anyBoolean());
     }
 }

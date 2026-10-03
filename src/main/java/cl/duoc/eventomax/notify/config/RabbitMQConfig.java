@@ -33,6 +33,13 @@ public class RabbitMQConfig {
     public static final String RK_EMAIL_TOPIC = "email.*";
     public static final String RK_EMAIL_DLQ = "q.cmd.email.dlq";
 
+    public static final String Q_CMD_CREW = "q.cmd.crew";
+    public static final String Q_CMD_CREW_DLQ = "q.cmd.crew.dlq";
+
+    public static final String RK_CREW_TICKET = "crew.ticket";
+    public static final String RK_CREW_TOPIC = "crew.#";
+    public static final String RK_CREW_DLQ = "q.cmd.crew.dlq";
+
     // --- Exchanges ---
 
     @Bean
@@ -65,6 +72,19 @@ public class RabbitMQConfig {
         return QueueBuilder.durable(Q_CMD_EMAIL_DLQ).build();
     }
 
+    @Bean
+    public Queue qCmdCrew() {
+        return QueueBuilder.durable(Q_CMD_CREW)
+                .withArgument("x-dead-letter-exchange", CMD_DEAD_DLX_EXCHANGE)
+                .withArgument("x-dead-letter-routing-key", RK_CREW_DLQ)
+                .build();
+    }
+
+    @Bean
+    public Queue qCmdCrewDlq() {
+        return QueueBuilder.durable(Q_CMD_CREW_DLQ).build();
+    }
+
     // --- Bindings ---
 
     @Bean
@@ -86,6 +106,27 @@ public class RabbitMQConfig {
         return BindingBuilder.bind(qCmdEmailDlq())
                 .to(cmdDeadDlxExchange())
                 .with(RK_EMAIL_DLQ);
+    }
+
+    @Bean
+    public Binding bindingDirectCrew() {
+        return BindingBuilder.bind(qCmdCrew())
+                .to(cmdDirectExchange())
+                .with(RK_CREW_TICKET);
+    }
+
+    @Bean
+    public Binding bindingTopicCrew() {
+        return BindingBuilder.bind(qCmdCrew())
+                .to(cmdTopicExchange())
+                .with(RK_CREW_TOPIC);
+    }
+
+    @Bean
+    public Binding bindingDlqCrew() {
+        return BindingBuilder.bind(qCmdCrewDlq())
+                .to(cmdDeadDlxExchange())
+                .with(RK_CREW_DLQ);
     }
 
 }

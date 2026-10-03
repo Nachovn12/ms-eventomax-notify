@@ -13,6 +13,8 @@ import org.slf4j.MDC;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.support.AmqpHeaders;
 import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.retry.support.RetryTemplate;
+import org.springframework.retry.RetryCallback;
 import org.springframework.stereotype.Component;
 
 /**
@@ -30,13 +32,16 @@ public class EmailCommandListener {
     private final ObjectMapper objectMapper;
     private final EmailNotificationService emailNotificationService;
     private final ProcessedEventStore processedEventStore;
+    private final RetryTemplate retryTemplate;
 
     public EmailCommandListener(ObjectMapper objectMapper,
                                 EmailNotificationService emailNotificationService,
-                                ProcessedEventStore processedEventStore) {
+                                ProcessedEventStore processedEventStore,
+                                RetryTemplate retryTemplate) {
         this.objectMapper = objectMapper;
         this.emailNotificationService = emailNotificationService;
         this.processedEventStore = processedEventStore;
+        this.retryTemplate = retryTemplate;
     }
 
     @RabbitListener(queues = RabbitMQConfig.Q_CMD_EMAIL, ackMode = "MANUAL")
@@ -70,10 +75,17 @@ public class EmailCommandListener {
                     return;
                 }
 
-                // 5. & 6. & 7. Procesar con idempotencia atómica
+                // 5. & 6. & 7. Procesar con idempotencia atómica y reintentos controlados
                 boolean processed = processedEventStore.processOnce(
                         envelope.eventId(),
-                        () -> emailNotificationService.processEmailNotification(envelope)
+                        () -> retryTemplate.execute((RetryCallback<Void, RuntimeException>) context -> {
+                            if (context.getRetryCount() > 0) {
+                                log.warn("Reintento {} de procesamiento: eventId={}",
+                                        context.getRetryCount(), envelope.eventId());
+                            }
+                            emailNotificationService.processEmailNotification(envelope);
+                            return null;
+                        })
                 );
 
                 if (!processed) {

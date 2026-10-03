@@ -22,3 +22,9 @@ management:
 
 server:
   port: 8080
+
+eventomax:
+  notify:
+    retry:
+      max-attempts: ${NOTIFY_RETRY_MAX_ATTEMPTS:3}
+      initial-interval-ms: ${NOTIFY_RETRY_INITIAL_INTERVAL_MS:500}

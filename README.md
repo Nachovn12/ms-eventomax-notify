@@ -20,11 +20,16 @@ Su única responsabilidad en este incremento es consumir comandos de notificaci�
 
 ```
 ms-eventomax-productions
-  └─► Exchange: cmd.direct / routing key: email.send
-        └─► Queue: q.cmd.email
-              └─► ms-eventomax-notify (EmailCommandListener)
-                    └─► EmailNotificationService
-                          └─► LoggingEmailSender (simulado)
+  ├─► Exchange: cmd.direct / routing key: email.send
+  │     └─► Queue: q.cmd.email
+  │           └─► ms-eventomax-notify (EmailCommandListener)
+  │                 └─► EmailNotificationService
+  │                       └─► LoggingEmailSender (simulado)
+  └─► Exchange: cmd.direct / routing key: crew.ticket
+        └─► Queue: q.cmd.crew
+              └─► ms-eventomax-notify (CrewCommandListener)
+                    └─► CrewTicketNotificationService
+                          └─► LoggingCrewTicketSender (simulado)
 ```
 
 ### Dead Letter Queue (DLQ)
@@ -33,6 +38,7 @@ Los mensajes rechazados (NACK sin requeue) son enviados automáticamente por Rab
 
 ```
 q.cmd.email ──(DLX: cmd.dead.dlx)──► q.cmd.email.dlq
+q.cmd.crew  ──(DLX: cmd.dead.dlx)──► q.cmd.crew.dlq
 ```
 
 ---
@@ -52,7 +58,9 @@ q.cmd.email ──(DLX: cmd.dead.dlx)──► q.cmd.email.dlq
 }
 ```
 
-### Payload (`EmailProductionStatusPayload`)
+> **Nota:** El valor de `"type"` depende del comando. Para notificaciones de email es `"SendProductionStatusEmail"`, y para generación de tickets de cuadrilla es `"GenerateCrewTicket"`.
+
+### Payload Email (`EmailProductionStatusPayload`)
 
 ```json
 {
@@ -64,6 +72,20 @@ q.cmd.email ──(DLX: cmd.dead.dlx)──► q.cmd.email.dlq
   "location": "Santiago, Chile"
 }
 ```
+
+### Payload Crew (`CrewTicketPayload`) (V1)
+
+```json
+{
+  "productionId": 100,
+  "productionName": "Concierto Rock",
+  "scheduledAt": "2026-12-01T20:00:00",
+  "location": "Santiago, Chile",
+  "status": "EN_MONTAJE"
+}
+```
+
+> **Nota:** Por ahora el ticket de cuadrilla se simula mediante logging. El contrato V1 incluye los datos mostrados arriba. La asignación detallada de la cuadrilla y sus integrantes se incorporará en el futuro cuando exista ese dominio/contrato.
 
 El envelope completo viaja en el **body JSON** del mensaje RabbitMQ.
 No se depende de headers Java personalizados del publisher.
@@ -207,14 +229,20 @@ src/main/java/cl/duoc/eventomax/notify/
 ├── messaging/
 │   ├── common/
 │   │   └── MessageEnvelope.java            # Envelope genérico
-│   └── email/
-│       ├── EmailProductionStatusPayload.java   # Payload de email
-│       └── EmailCommandListener.java       # Consumidor q.cmd.email
+│   ├── email/
+│   │   ├── EmailProductionStatusPayload.java   # Payload de email
+│   │   └── EmailCommandListener.java       # Consumidor q.cmd.email
+│   └── crew/
+│       ├── CrewTicketPayload.java          # Payload de ticket de cuadrilla
+│       └── CrewCommandListener.java        # Consumidor q.cmd.crew
 ├── service/
-│   └── EmailNotificationService.java       # Servicio de aplicación
+│   ├── EmailNotificationService.java       # Servicio de email
+│   └── CrewTicketNotificationService.java  # Servicio de cuadrilla
 ├── sender/
-│   ├── EmailSender.java                    # Interfaz de envío
-│   └── LoggingEmailSender.java             # Implementación simulada
+│   ├── EmailSender.java                    # Interfaz de envío email
+│   ├── LoggingEmailSender.java             # Implementación simulada email
+│   ├── CrewTicketSender.java               # Interfaz de envío cuadrilla
+│   └── LoggingCrewTicketSender.java        # Implementación simulada cuadrilla
 └── idempotency/
     ├── ProcessedEventStore.java            # Interfaz de idempotencia
     └── InMemoryProcessedEventStore.java    # Implementación in-memory
@@ -231,7 +259,7 @@ src/main/java/cl/duoc/eventomax/notify/
 | **C.** Type inválido | No procesa, NACK → DLQ |
 | **D.** Envelope inválido | No procesa, NACK → DLQ |
 | **E.** Error del servicio | No marca procesado, NACK → DLQ |
-| **F.** Servicio | Delega correctamente a EmailSender |
+| **F.** Servicio | Delega correctamente a Sender |
 | **G.** Idempotencia | InMemoryProcessedEventStore: initial false, after mark true, thread-safety |
 
 Todos los tests son **unitarios** y no requieren RabbitMQ real.
@@ -241,7 +269,6 @@ Todos los tests son **unitarios** y no requieren RabbitMQ real.
 ## Fuera de alcance (este incremento)
 
 - ❌ Envío de email real (SMTP, SES, SendGrid, etc.)
-- ❌ `q.cmd.crew` — cola de notificaciones de equipo técnico
 - ❌ `q.cmd.quote` — cola de cotizaciones
 - ❌ Persistencia de idempotencia (Redis, base de datos)
 - ❌ API pública / controllers REST

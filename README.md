@@ -154,9 +154,9 @@ Se limpia con `try/finally` al terminar cada mensaje para evitar contaminación 
 | `RABBITMQ_USERNAME` | Usuario de RabbitMQ |
 | `RABBITMQ_PASSWORD` | Contraseña de RabbitMQ |
 
-**Nota:** `application.yml` no define valores por defecto (ej. `guest`) para estas variables para evitar exposición. En entornos locales o Docker, deben proporcionarse mediante variables de entorno o archivo `.env`.
+**Nota:** `application.yml` mantiene defaults orientados al desarrollo local para `RABBITMQ_HOST` (`localhost`) y `RABBITMQ_PORT` (`5672`), mientras que usuario y contraseña quedan vacíos si no se proporcionan. En producción, `docker-compose.prod.yml` exige explícitamente `RABBITMQ_HOST`, `RABBITMQ_USERNAME` y `RABBITMQ_PASSWORD`, evitando que el despliegue cloud dependa de los defaults locales.
 
-Ver `.env.example` para la configuración Docker.
+Ver `.env.example` para la configuración Docker local y `.env.prod.example` para la plantilla de producción.
 
 ---
 

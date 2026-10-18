@@ -7,6 +7,16 @@ import org.springframework.retry.backoff.FixedBackOffPolicy;
 import org.springframework.retry.policy.SimpleRetryPolicy;
 import org.springframework.retry.support.RetryTemplate;
 
+/**
+ * Configuración de política de reintentos acotados para los consumidores AMQP.
+ * <p>
+ * <strong>Semántica de intentos vs. reintentos:</strong> En {@link SimpleRetryPolicy},
+ * {@code maxAttempts = 3} significa exactamente <strong>3 intentos totales</strong> de ejecución
+ * (1 intento inicial + 2 reintentos adicionales), y <em>no</em> 3 reintentos adicionales
+ * (lo cual equivaldría a 4 ejecuciones totales). Tras fallar el 3.er intento total,
+ * la excepción se propaga al listener para ejecutar {@code basicNack(deliveryTag, false, false)}
+ * y enrutar el mensaje a su DLQ correspondiente vía {@code cmd.dead.dlx}.
+ */
 @Configuration
 public class NotificationRetryConfig {
 
@@ -38,3 +48,4 @@ public class NotificationRetryConfig {
         return template;
     }
 }
+

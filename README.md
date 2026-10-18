@@ -12,7 +12,7 @@ Microservicio interno de EventoMax encargado de procesar trabajos/notificaciones
 ## Responsabilidad
 
 Este microservicio **no es público** (no expone API REST de negocio).
-Su responsabilidad en este incremento es consumir comandos de notificación de email (`q.cmd.email`) y tickets de cuadrilla (`q.cmd.crew`) desde RabbitMQ y procesarlos de forma asíncrona.
+Su responsabilidad en este incremento es consumir comandos de notificación de email (`q.cmd.email`), tickets de cuadrilla (`q.cmd.crew`) y cotizaciones/resúmenes de cierre en PDF (`q.cmd.quote`) desde RabbitMQ y procesarlos de forma asíncrona.
 
 ---
 
@@ -20,16 +20,21 @@ Su responsabilidad en este incremento es consumir comandos de notificación de e
 
 ```
 ms-eventomax-productions
-  ├─► Exchange: cmd.direct / routing key: email.send
+  ├─► Exchange: cmd.direct / routing key: email.send (y cmd.topic / email.*)
   │     └─► Queue: q.cmd.email
   │           └─► ms-eventomax-notify (EmailCommandListener)
   │                 └─► EmailNotificationService
   │                       └─► LoggingEmailSender (simulado)
-  └─► Exchange: cmd.direct / routing key: crew.ticket
-        └─► Queue: q.cmd.crew
-              └─► ms-eventomax-notify (CrewCommandListener)
-                    └─► CrewTicketNotificationService
-                          └─► LoggingCrewTicketSender (simulado)
+  ├─► Exchange: cmd.direct / routing key: crew.ticket (y cmd.topic / crew.#)
+  │     └─► Queue: q.cmd.crew
+  │           └─► ms-eventomax-notify (CrewCommandListener)
+  │                 └─► CrewTicketNotificationService
+  │                       └─► LoggingCrewTicketSender (simulado)
+  └─► Exchange: cmd.direct / routing key: quote.gen (y cmd.topic / quote.*)
+        └─► Queue: q.cmd.quote
+              └─► ms-eventomax-notify (QuoteCommandListener)
+                    └─► QuoteNotificationService
+                          └─► PdfQuoteGenerator (generación real de PDF 1.4 en disco)
 ```
 
 ### Dead Letter Queue (DLQ)
@@ -39,6 +44,7 @@ Los mensajes rechazados (NACK sin requeue) son enviados automáticamente por Rab
 ```
 q.cmd.email ──(DLX: cmd.dead.dlx)──► q.cmd.email.dlq
 q.cmd.crew  ──(DLX: cmd.dead.dlx)──► q.cmd.crew.dlq
+q.cmd.quote ──(DLX: cmd.dead.dlx)──► q.cmd.quote.dlq
 ```
 
 ---
@@ -58,7 +64,10 @@ q.cmd.crew  ──(DLX: cmd.dead.dlx)──► q.cmd.crew.dlq
 }
 ```
 
-> **Nota:** El valor de `"type"` depende del comando. Para notificaciones de email es `"SendProductionStatusEmail"`, y para generación de tickets de cuadrilla es `"GenerateCrewTicket"`.
+> **Nota:** El valor de `"type"` depende del comando:
+> - `"SendProductionStatusEmail"` para notificaciones de email (`q.cmd.email`).
+> - `"GenerateCrewTicket"` para generación de tickets de cuadrilla (`q.cmd.crew`).
+> - `"GenerateClosingQuote"` para generación de cotización/resumen PDF de cierre (`q.cmd.quote`).
 
 ### Payload Email (`EmailProductionStatusPayload`)
 
@@ -87,6 +96,29 @@ q.cmd.crew  ──(DLX: cmd.dead.dlx)──► q.cmd.crew.dlq
 
 > **Nota:** Por ahora el ticket de cuadrilla se simula mediante logging. El contrato V1 incluye los datos mostrados arriba. La asignación detallada de la cuadrilla y sus integrantes se incorporará en el futuro cuando exista ese dominio/contrato.
 
+### Payload Quote (`QuoteCommandPayload`) (V1)
+
+```json
+{
+  "productionId": 100,
+  "organizerId": "org-001",
+  "productionName": "Concierto Rock",
+  "status": "CERRADO",
+  "scheduledAt": "2026-12-01T20:00:00",
+  "location": "Santiago, Chile",
+  "closedAt": "2026-12-02T02:15:00Z"
+}
+```
+
+### Generación Real y Recuperación del PDF (`PdfQuoteGenerator`)
+
+Al consumir un comando `GenerateClosingQuote` en `q.cmd.quote`, `PdfQuoteGenerator` construye un documento **PDF 1.4 real y verificable** (`%PDF-1.4`, `/Type /Catalog`, `/Type /Page`, tabla `xref` y `%%EOF`) y lo almacena de forma persistente en el directorio configurado por `eventomax.notify.quote.output-dir` (variable de entorno `NOTIFY_QUOTE_OUTPUT_DIR`, por defecto `./data/quotes`):
+
+- **Archivo por evento (trazabilidad histórica):** `./data/quotes/quote-production-{productionId}-{eventId}.pdf`
+- **Puntero al último cierre de la producción (DEMO):** `./data/quotes/quote-production-{productionId}-latest.pdf`
+
+El documento PDF incluye únicamente los campos reales del dominio de Producción (`productionId`, `productionName`, `organizerId`, `status`, `scheduledAt`, `location`, `closedAt`, `eventId`, `traceId`, `correlationId`) y deja constancia explícita de que no simula montos financieros inexistentes.
+
 El envelope completo viaja en el **body JSON** del mensaje RabbitMQ.
 No se depende de headers Java personalizados del publisher.
 
@@ -99,20 +131,20 @@ No se depende de headers Java personalizados del publisher.
 | Mensaje válido y procesado correctamente | `basicAck(deliveryTag, false)` |
 | Mensaje duplicado (eventId ya procesado) | `basicAck(deliveryTag, false)` — sin reprocesar |
 | Envelope inválido (campos null/blank) | `basicNack(deliveryTag, false, false)` → DLQ |
-| Type no soportado (≠ `SendProductionStatusEmail`) | `basicNack(deliveryTag, false, false)` → DLQ |
-| Error de procesamiento no recuperable | `basicNack(deliveryTag, false, false)` → DLQ |
+| Type no soportado | `basicNack(deliveryTag, false, false)` → DLQ |
+| Error de procesamiento tras agotar reintentos | `basicNack(deliveryTag, false, false)` → DLQ |
 
 - **`requeue = false`** siempre en NACK → evita requeue infinito.
-- El mensaje rechazado va a la DLQ gracias a la DLX configurada en la infraestructura.
+- El mensaje rechazado va a la DLQ correspondiente (`q.cmd.email.dlq`, `q.cmd.crew.dlq`, `q.cmd.quote.dlq`) gracias a la DLX (`cmd.dead.dlx`) configurada en los beans y en `definitions.json`.
 
 ### Retries controlados
 
-Se utiliza **Spring Retry** de forma programática.
-- **Intentos máximos:** 3 por defecto (`NOTIFY_RETRY_MAX_ATTEMPTS`).
+Se utiliza **Spring Retry** (`RetryTemplate`) de forma programática:
+- **`maxAttempts = 3` intentos totales** por defecto (`NOTIFY_RETRY_MAX_ATTEMPTS`), compuestos por **1 intento inicial + 2 reintentos adicionales** (no confundir con 3 reintentos adicionales).
 - **Backoff fijo:** 500 ms por defecto (`NOTIFY_RETRY_INITIAL_INTERVAL_MS`).
-- Si un intento funciona, se marca el evento como procesado y se ejecuta `basicAck`.
-- Si se agotan los intentos, el mensaje no se marca como procesado y recibe un `basicNack` con `requeue=false`, derivando el mensaje a la DLQ (`q.cmd.email.dlq`).
-- Mensajes con JSON inválido o tipo no soportado no se reintentan y van directo a DLQ.
+- Si un intento funciona, se marca el `eventId` como procesado y se ejecuta `basicAck`.
+- Si se agotan los 3 intentos totales, el mensaje no se marca como procesado y recibe `basicNack(deliveryTag, false, false)`, derivando el mensaje a su DLQ (`q.cmd.email.dlq`, `q.cmd.crew.dlq` o `q.cmd.quote.dlq`).
+- Mensajes con JSON inválido, sobre incompleto o `type` no soportado no se reintentan y van directo a DLQ.
 
 ---
 
@@ -240,12 +272,12 @@ ms-eventomax-productions
         |
         v
 RabbitMQ AWS
-   |          |
-   v          v
-q.cmd.email  q.cmd.crew
-   \          /
-    v        v
- ms-eventomax-notify
+   |            |            |
+   v            v            v
+q.cmd.email  q.cmd.crew  q.cmd.quote
+   \            |            /
+    v           v           v
+       ms-eventomax-notify
 ```
 
 Aclaración: RabbitMQ puede estar en infraestructura EC2 separada, pero la comunicación debe ocurrir mediante conectividad privada de AWS/VPC.
@@ -258,24 +290,31 @@ Aclaración: RabbitMQ puede estar en infraestructura EC2 separada, pero la comun
 src/main/java/cl/duoc/eventomax/notify/
 ├── MsEventomaxNotifyApplication.java       # Entrada Spring Boot
 ├── config/
-│   └── RabbitMQConfig.java                 # Topología RabbitMQ (idempotente)
+│   ├── RabbitMQConfig.java                 # Topología RabbitMQ (3 exchanges, 6 colas, 9 bindings)
+│   └── NotificationRetryConfig.java        # RetryTemplate (3 intentos totales = 1 inicial + 2 reintentos)
 ├── messaging/
 │   ├── common/
 │   │   └── MessageEnvelope.java            # Envelope genérico
 │   ├── email/
 │   │   ├── EmailProductionStatusPayload.java   # Payload de email
 │   │   └── EmailCommandListener.java       # Consumidor q.cmd.email
-│   └── crew/
-│       ├── CrewTicketPayload.java          # Payload de ticket de cuadrilla
-│       └── CrewCommandListener.java        # Consumidor q.cmd.crew
+│   ├── crew/
+│   │   ├── CrewTicketPayload.java          # Payload de ticket de cuadrilla
+│   │   └── CrewCommandListener.java        # Consumidor q.cmd.crew
+│   └── quote/
+│       ├── QuoteCommandPayload.java        # Payload de cotización/resumen PDF de cierre
+│       └── QuoteCommandListener.java       # Consumidor q.cmd.quote
 ├── service/
 │   ├── EmailNotificationService.java       # Servicio de email
-│   └── CrewTicketNotificationService.java  # Servicio de cuadrilla
+│   ├── CrewTicketNotificationService.java  # Servicio de cuadrilla
+│   └── QuoteNotificationService.java       # Servicio de cotización PDF
 ├── sender/
 │   ├── EmailSender.java                    # Interfaz de envío email
 │   ├── LoggingEmailSender.java             # Implementación simulada email
 │   ├── CrewTicketSender.java               # Interfaz de envío cuadrilla
-│   └── LoggingCrewTicketSender.java        # Implementación simulada cuadrilla
+│   ├── LoggingCrewTicketSender.java        # Implementación simulada cuadrilla
+│   ├── QuoteGenerator.java                 # Interfaz de generación PDF
+│   └── PdfQuoteGenerator.java              # Generador real de PDF 1.4 en disco
 └── idempotency/
     ├── ProcessedEventStore.java            # Interfaz de idempotencia
     └── InMemoryProcessedEventStore.java    # Implementación in-memory
@@ -287,22 +326,20 @@ src/main/java/cl/duoc/eventomax/notify/
 
 | Test | Qué valida |
 |---|---|
-| **A.** Mensaje válido | Procesa, marca idempotencia, ACK |
+| **A.** Mensaje válido | Procesa, marca idempotencia, ACK (`email`, `crew`, `quote`) |
 | **B.** Duplicado | No reprocesa, ACK |
 | **C.** Type inválido | No procesa, NACK → DLQ |
 | **D.** Envelope inválido | No procesa, NACK → DLQ |
-| **E.** Error del servicio | No marca procesado, NACK → DLQ |
-| **F.** Servicio | Delega correctamente a Sender |
-| **G.** Idempotencia | InMemoryProcessedEventStore: initial false, after mark true, thread-safety |
-
-Todos los tests son **unitarios** y no requieren RabbitMQ real.
+| **E.** Error del servicio | Reintenta hasta 3 intentos totales, no marca procesado, NACK → DLQ |
+| **F.** Servicio / PDF | Delega a Sender y valida generación real de PDF 1.4 (`%PDF-1.4`, `xref`, `%%EOF`) |
+| **G.** Idempotencia | `InMemoryProcessedEventStore`: atomicidad `processOnce`, thread-safety |
+| **H.** Integración RabbitMQ | `EmailRetryRabbitIT` con Testcontainers (`rabbitmq:4.3.6-management`, 19 escenarios reales aislados) |
 
 ---
 
 ## Fuera de alcance (este incremento)
 
 - ❌ Envío de email real (SMTP, SES, SendGrid, etc.)
-- ❌ `q.cmd.quote` — cola de cotizaciones
 - ❌ Persistencia de idempotencia (Redis, base de datos)
 - ❌ API pública / controllers REST
 - ❌ Base de datos

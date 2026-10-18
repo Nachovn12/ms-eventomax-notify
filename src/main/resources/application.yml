@@ -26,5 +26,9 @@ server:
 eventomax:
   notify:
     retry:
+      # 3 intentos totales = 1 intento inicial + 2 reintentos adicionales antes de NACK a DLQ
       max-attempts: ${NOTIFY_RETRY_MAX_ATTEMPTS:3}
       initial-interval-ms: ${NOTIFY_RETRY_INITIAL_INTERVAL_MS:500}
+    quote:
+      output-dir: ${NOTIFY_QUOTE_OUTPUT_DIR:./data/quotes}
+

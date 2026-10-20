@@ -12,10 +12,13 @@ spring:
     open-in-view: false
     properties:
       hibernate:
-        default_schema: ${SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA:public}
+        default_schema: ${SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA:notify}
   flyway:
     enabled: ${FLYWAY_ENABLED:true}
     locations: classpath:db/migration
+    default-schema: ${SPRING_FLYWAY_DEFAULT_SCHEMA:notify}
+    schemas: ${SPRING_FLYWAY_SCHEMAS:notify}
+    create-schemas: ${SPRING_FLYWAY_CREATE_SCHEMAS:true}
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}

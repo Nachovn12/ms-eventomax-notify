@@ -12,7 +12,7 @@ spring:
     open-in-view: false
     properties:
       hibernate:
-        default_schema: public
+        default_schema: ${SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA:public}
   flyway:
     enabled: ${FLYWAY_ENABLED:true}
     locations: classpath:db/migration
@@ -57,6 +57,10 @@ server:
 
 eventomax:
   notify:
+    email:
+      provider: ${EVENTOMAX_NOTIFY_EMAIL_PROVIDER:smtp}
+    crew:
+      provider: ${EVENTOMAX_NOTIFY_CREW_PROVIDER:database}
     retry:
       max-attempts: ${NOTIFY_RETRY_MAX_ATTEMPTS:3}
       initial-interval-ms: ${NOTIFY_RETRY_INITIAL_INTERVAL_MS:500}
@@ -64,6 +68,7 @@ eventomax:
       from: ${NOTIFY_MAIL_FROM:no-reply@eventomax.cl}
       from-name: ${NOTIFY_MAIL_FROM_NAME:EventoMax Notificaciones}
     quote:
+      provider: ${EVENTOMAX_NOTIFY_QUOTE_PROVIDER:enterprise}
       output-dir: ${NOTIFY_QUOTE_OUTPUT_DIR:./data/quotes}
     storage:
       provider: ${STORAGE_PROVIDER:local}

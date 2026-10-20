@@ -267,4 +267,26 @@ class QuoteNotificationServiceTest {
         // Verificar que en documentStorageService NO se intentó sobreescribir latest
         verify(documentStorageService, never()).storeDocument("quotes", "quote-production-1-latest.pdf", newPdfBytes, "application/pdf");
     }
+
+    @Test
+    @DisplayName("6. Configuración explícita provider=legacy: delega directamente a QuoteGenerator incluso si existen componentes empresariales")
+    void processQuoteGeneration_whenProviderIsLegacy_shouldDelegateDirectlyToQuoteGenerator(@TempDir Path tempDir) {
+        var service = new QuoteNotificationService(
+                documentBuilder,
+                openPdfGenerator,
+                fallbackQuoteGenerator,
+                documentStorageService,
+                tempDir.toString(),
+                "legacy"
+        );
+        var envelope = createTestEnvelope(600L, "evt-b3-explicit-legacy");
+        Path expectedPath = tempDir.resolve("quote-production-600-evt-b3-explicit-legacy.pdf");
+        when(fallbackQuoteGenerator.generate(envelope)).thenReturn(expectedPath);
+
+        Path result = service.processQuoteGeneration(envelope);
+
+        assertEquals(expectedPath, result);
+        verify(fallbackQuoteGenerator, times(1)).generate(envelope);
+        verify(documentBuilder, never()).build(any());
+    }
 }

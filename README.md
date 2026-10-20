@@ -1,357 +1,262 @@
-# ms-eventomax-notify
+# ms-eventomax-notify — Microservicio Consumidor RabbitMQ, Generación Documental OpenPDF y Notificaciones (EP2)
 
-**DSY1107 – Desarrollo Cloud Native I · EventoMax**
-
-Microservicio interno de EventoMax encargado de procesar trabajos/notificaciones asíncronas desde RabbitMQ.
-
-> **Requerimiento:** RF-NOT-001
-> **Caso de uso:** CU-07
+**Asignatura:** Desarrollo Cloud Native I (`DSY1107`)
+**Caso de Estudio:** Caso 8 — Plataforma de Producción y Montaje de Eventos (**EventoMax**)
+**Equipo:** Ignacio Valeria, Benjamín Flores, Benjamín Espinoza
 
 ---
 
-## Responsabilidad
+## 1. Propósito del Repositorio y Rol en EventoMax
 
-Este microservicio **no es público** (no expone API REST de negocio).
-Su responsabilidad en este incremento es consumir comandos de notificación de email (`q.cmd.email`), tickets de cuadrilla (`q.cmd.crew`) y cotizaciones/resúmenes de cierre en PDF (`q.cmd.quote`) desde RabbitMQ y procesarlos de forma asíncrona.
+`ms-eventomax-notify` es el microservicio especializado en el procesamiento asíncrono de comandos operativos recibidos a través de **RabbitMQ** (`cmd.direct`) y en la generación de artefactos documentales y notificaciones de **EventoMax EP2**:
 
----
-
-## Flujo de mensajería
-
-```
-ms-eventomax-productions
-  ├─► Exchange: cmd.direct / routing key: email.send (y cmd.topic / email.*)
-  │     └─► Queue: q.cmd.email
-  │           └─► ms-eventomax-notify (EmailCommandListener)
-  │                 └─► EmailNotificationService
-  │                       └─► LoggingEmailSender (simulado)
-  ├─► Exchange: cmd.direct / routing key: crew.ticket (y cmd.topic / crew.#)
-  │     └─► Queue: q.cmd.crew
-  │           └─► ms-eventomax-notify (CrewCommandListener)
-  │                 └─► CrewTicketNotificationService
-  │                       └─► LoggingCrewTicketSender (simulado)
-  └─► Exchange: cmd.direct / routing key: quote.gen (y cmd.topic / quote.*)
-        └─► Queue: q.cmd.quote
-              └─► ms-eventomax-notify (QuoteCommandListener)
-                    └─► QuoteNotificationService
-                          └─► PdfQuoteGenerator (generación real de PDF 1.4 en disco)
-```
-
-### Dead Letter Queue (DLQ)
-
-Los mensajes rechazados (NACK sin requeue) son enviados automáticamente por RabbitMQ a:
-
-```
-q.cmd.email ──(DLX: cmd.dead.dlx)──► q.cmd.email.dlq
-q.cmd.crew  ──(DLX: cmd.dead.dlx)──► q.cmd.crew.dlq
-q.cmd.quote ──(DLX: cmd.dead.dlx)──► q.cmd.quote.dlq
-```
+1. **Consumidor de Comandos de Cierre (`q.cmd.quote` / `quote.gen`):** Ensambla información real de dominio (producción, contacto del organizador con correo enmascarado, servicios contratados, disponibilidad referencial de catálogo y línea de tiempo transaccional Outbox) y genera un **Acta de Cierre y Resumen Económico en PDF empresarial** utilizando **OpenPDF (`com.github.librepdf:openpdf`)** con tipografías embebidas (`Roboto`) y branding corporativo.
+2. **Consumidor de Tickets de Cuadrilla (`q.cmd.crew` / `crew.ticket`):** Genera y persiste en PostgreSQL (`crew_tickets`) los tickets técnicos de montaje asignados cuando una producción entra en estado `EN_EJECUCION`, exponiendo su consulta vía REST para el BFF y el frontend.
+3. **Consumidor de Notificaciones por Correo (`q.cmd.email` / `email.send`):** Procesa notificaciones de transición de estado con reintentos exponenciales acotados (`ExponentialBackOffPolicy`), auditoría de entregas (`notification_delivery_audit`) y soporte dual (`logging` seguro por defecto o `smtp` real).
+4. **Control Manual de Confirmaciones (`Channel.basicAck` / `Channel.basicNack`) e Idempotencia Persistente:** Garantiza procesamiento *at-least-once* efectivamente único mediante la tabla `processed_events` en PostgreSQL y derivación inmediata de mensajes corruptos o inválidos (`requeue=false`) hacia las **Dead Letter Queues (`*.dlq`)** a través de `cmd.dead.dlx`.
 
 ---
 
-## Contrato del mensaje
+## 2. Arquitectura del Módulo y Diagrama
 
-### Envelope (`MessageEnvelope<T>`)
+```mermaid
+flowchart LR
+    subgraph RabbitMQ Broker
+        EX["Exchange: cmd.direct"]
+        Q_QUOTE["q.cmd.quote"]
+        Q_CREW["q.cmd.crew"]
+        Q_EMAIL["q.cmd.email"]
+        DLX["DLX: cmd.dead.dlx"]
+        DLQ_QUOTE["q.cmd.quote.dlq"]
+        DLQ_CREW["q.cmd.crew.dlq"]
+        DLQ_EMAIL["q.cmd.email.dlq"]
+    end
 
-```json
-{
-  "type": "SendProductionStatusEmail",
-  "eventId": "uuid-único",
-  "timestamp": "2026-10-03T00:00:00Z",
-  "traceId": "trace-uuid",
-  "correlationId": "corr-uuid",
-  "payload": { ... }
-}
+    subgraph ms-eventomax-notify
+        L_QUOTE["QuoteCommandListener\n(MANUAL ACK/NACK)"]
+        L_CREW["CrewTicketCommandListener\n(MANUAL ACK/NACK)"]
+        L_EMAIL["EmailCommandListener\n(MANUAL ACK/NACK + Retry)"]
+        IDEMP["DatabaseProcessedEventStore\n(processed_events)"]
+        BUILDER["ProductionClosureDocumentBuilder\n+ CatalogEquipmentClient"]
+        PDF["OpenPdfClosureDocumentGenerator\n(OpenPDF + Roboto + Branding)"]
+        REST["NotifyQuoteController\nNotifyTicketController"]
+        PG_NOTIFY[("PostgreSQL (Flyway V1)\nprocessed_events\ncrew_tickets\nnotification_delivery_audit")]
+    end
+
+    EX -->|quote.gen| Q_QUOTE --> L_QUOTE
+    EX -->|crew.ticket| Q_CREW --> L_CREW
+    EX -->|email.send| Q_EMAIL --> L_EMAIL
+    L_QUOTE -.->|basicNack(requeue=false)| DLX --> DLQ_QUOTE
+    L_CREW -.->|basicNack(requeue=false)| DLX --> DLQ_CREW
+    L_EMAIL -.->|basicNack(requeue=false)| DLX --> DLQ_EMAIL
+    L_QUOTE --> IDEMP --> PG_NOTIFY
+    L_QUOTE --> BUILDER --> PDF
+    L_CREW --> PG_NOTIFY
+    L_EMAIL --> PG_NOTIFY
+    REST --> PG_NOTIFY
 ```
-
-> **Nota:** El valor de `"type"` depende del comando:
-> - `"SendProductionStatusEmail"` para notificaciones de email (`q.cmd.email`).
-> - `"GenerateCrewTicket"` para generación de tickets de cuadrilla (`q.cmd.crew`).
-> - `"GenerateClosingQuote"` para generación de cotización/resumen PDF de cierre (`q.cmd.quote`).
-
-### Payload Email (`EmailProductionStatusPayload`)
-
-```json
-{
-  "productionId": 100,
-  "organizerId": "org-001",
-  "productionName": "Concierto Rock",
-  "status": "CONFIRMED",
-  "scheduledAt": "2026-12-01T20:00:00",
-  "location": "Santiago, Chile"
-}
-```
-
-### Payload Crew (`CrewTicketPayload`) (V1)
-
-```json
-{
-  "productionId": 100,
-  "productionName": "Concierto Rock",
-  "scheduledAt": "2026-12-01T20:00:00",
-  "location": "Santiago, Chile",
-  "status": "EN_MONTAJE"
-}
-```
-
-> **Nota:** Por ahora el ticket de cuadrilla se simula mediante logging. El contrato V1 incluye los datos mostrados arriba. La asignación detallada de la cuadrilla y sus integrantes se incorporará en el futuro cuando exista ese dominio/contrato.
-
-### Payload Quote (`QuoteCommandPayload`) (V1)
-
-```json
-{
-  "productionId": 100,
-  "organizerId": "org-001",
-  "productionName": "Concierto Rock",
-  "status": "CERRADO",
-  "scheduledAt": "2026-12-01T20:00:00",
-  "location": "Santiago, Chile",
-  "closedAt": "2026-12-02T02:15:00Z"
-}
-```
-
-### Generación Real y Recuperación del PDF (`PdfQuoteGenerator`)
-
-Al consumir un comando `GenerateClosingQuote` en `q.cmd.quote`, `PdfQuoteGenerator` construye un documento **PDF 1.4 real y verificable** (`%PDF-1.4`, `/Type /Catalog`, `/Type /Page`, tabla `xref` y `%%EOF`) y lo almacena de forma persistente en el directorio configurado por `eventomax.notify.quote.output-dir` (variable de entorno `NOTIFY_QUOTE_OUTPUT_DIR`, por defecto `./data/quotes`):
-
-- **Archivo por evento (trazabilidad histórica):** `./data/quotes/quote-production-{productionId}-{eventId}.pdf`
-- **Puntero al último cierre de la producción (DEMO):** `./data/quotes/quote-production-{productionId}-latest.pdf`
-
-El documento PDF incluye únicamente los campos reales del dominio de Producción (`productionId`, `productionName`, `organizerId`, `status`, `scheduledAt`, `location`, `closedAt`, `eventId`, `traceId`, `correlationId`) y deja constancia explícita de que no simula montos financieros inexistentes.
-
-El envelope completo viaja en el **body JSON** del mensaje RabbitMQ.
-No se depende de headers Java personalizados del publisher.
 
 ---
 
-## ACK/NACK manual
+## 3. Stack Tecnológico y Versiones Reales (`pom.xml`)
 
-| Escenario | Acción |
+| Componente | Tecnología / Dependencia | Versión |
+|---|---|---|
+| Lenguaje | Java (Eclipse Temurin) | `25` |
+| Framework Base | Spring Boot (`spring-boot-starter-parent`) | `4.1.1` |
+| Mensajería AMQP | `spring-boot-starter-amqp` (RabbitMQ) | Boot `4.1.1` |
+| Generación PDF | OpenPDF (`com.github.librepdf:openpdf`) | `2.0.3` |
+| Persistencia | Spring Data JPA + PostgreSQL + Flyway (`V1`) | Boot `4.1.1` |
+| Correo Electrónico | `spring-boot-starter-mail` (JavaMailSender) | Boot `4.1.1` |
+| Almacenamiento Cloud | AWS SDK v2 S3 (`software.amazon.awssdk:s3`) | `2.31.7` |
+| Testing | JUnit 5, PDFBox (`3.0.4`, verificación de texto PDF en tests), Mockito, H2 | Boot `4.1.1` |
+
+---
+
+## 4. Cumplimiento de Rúbrica EP2 (Matriz Caso 8)
+
+| Criterio de Evaluación EP2 | Implementación en `ms-eventomax-notify` | Estado |
+|---|---|---|
+| **Consumidor RabbitMQ (`@RabbitListener`)** | Tres consumidores activos (`EmailCommandListener`, `CrewTicketCommandListener`, `QuoteCommandListener`) escuchando `q.cmd.email`, `q.cmd.crew` y `q.cmd.quote`. | **CUMPLIDO** |
+| **ACK y NACK Manual (`acknowledge-mode: manual`)** | Cada listener recibe `Channel` y `DELIVERY_TAG`. Confirma con `basicAck(tag, false)` tras persistir/generar, o rechaza con `basicNack(tag, false, false)` ante errores de validación o fallos definitivos. | **CUMPLIDO** |
+| **Dead Letter Exchange (`cmd.dead.dlx`) y Colas DLQ** | Topología declarada en `RabbitMQTopologyConfig` con `x-dead-letter-exchange: cmd.dead.dlx` y routing keys dedicadas hacia `q.cmd.email.dlq`, `q.cmd.crew.dlq` y `q.cmd.quote.dlq`. Certificada con broker real en `QuoteCommandDlqLiveIT`. | **CUMPLIDO** |
+| **Idempotencia ante Reentregas** | `DatabaseProcessedEventStore` persiste cada `eventId` procesado en `processed_events` (PostgreSQL). Duplicados reciben `basicAck` inmediato sin regenerar PDF ni reenviar correos. | **CUMPLIDO** |
+| **Generación Documental Real (OpenPDF)** | `OpenPdfClosureDocumentGenerator` produce un documento PDF empresarial multipágina (>130 KB) con fuentes embebidas, resumen económico en USD, contacto minimizado y trazabilidad técnica Kafka/RabbitMQ/SHA-256. | **CUMPLIDO** |
+
+---
+
+## 5. Endpoints Expuestos (Consumo Interno desde BFF)
+
+| Método | Ruta | Consumidor Principal | Descripción |
+|---|---|---|---|
+| `GET` | `/api/notify/quotes/{productionId}/pdf` | `ms-eventomax-bff` (`GET /api/productions/{id}/quote-pdf`) | Descarga el binario `application/pdf` del Acta de Cierre generada para la producción. |
+| `GET` | `/api/notify/tickets/{productionId}` | `ms-eventomax-bff` (`GET /api/productions/{id}/crew-ticket`) | Devuelve el ticket de cuadrilla técnica emitido al pasar a `EN_EJECUCION`. |
+| `GET` | `/actuator/health`, `/actuator/info` | Docker Healthcheck / Monitoreo | Estado de salud del microservicio y conectividad AMQP/DB. |
+
+---
+
+## 6. Seguridad y Privacidad Documental
+
+- `ms-eventomax-notify` opera en la red interna `eventomax-net` sin exposición directa a Internet; todo acceso HTTP externo pasa por **AWS API Gateway (JWT Authorizer)** y **`ms-eventomax-bff`**, el cual valida el token JWT de Microsoft Entra ID y verifica la propiedad de la producción (`checkProductionOwnership`) antes de solicitar el PDF o el ticket.
+- El Acta PDF aplica **minimización de datos personales**: el correo del organizador se renderiza enmascarado (`cl****************@eventomax.cl`) y los montos financieros se expresan consistentemente en `USD`.
+
+---
+
+## 7. Integración con RabbitMQ
+
+### Topología Declarada (`RabbitMQTopologyConfig`)
+- **Exchanges:**
+  - `cmd.direct` (`DirectExchange`, durable)
+  - `cmd.dead.dlx` (`DirectExchange`, durable)
+- **Colas Operativas y Bindings (`cmd.direct`):**
+  - `q.cmd.email` ← `email.send` (DLX: `cmd.dead.dlx`, DLK: `email.send.dlq`)
+  - `q.cmd.crew` ← `crew.ticket` (DLX: `cmd.dead.dlx`, DLK: `crew.ticket.dlq`)
+  - `q.cmd.quote` ← `quote.gen` (DLX: `cmd.dead.dlx`, DLK: `quote.gen.dlq`)
+- **Colas Dead Letter (`cmd.dead.dlx`):**
+  - `q.cmd.email.dlq` ← `email.send.dlq`
+  - `q.cmd.crew.dlq` ← `crew.ticket.dlq`
+  - `q.cmd.quote.dlq` ← `quote.gen.dlq`
+
+### Flujo de ACK / NACK y DLQ
+1. El listener deserializa el sobre JSON `MessageEnvelope<T>` usando Jackson 3 (`tools.jackson.databind.ObjectMapper`).
+2. Si el JSON es inválido, el `type` no coincide con el esperado o faltan campos obligatorios (`eventId`, `productionId`, `status`), el listener invoca `channel.basicNack(deliveryTag, false, false)`.
+3. RabbitMQ encamina automáticamente el mensaje rechazado hacia `cmd.dead.dlx`, depositándolo en la cola `*.dlq` correspondiente con la cabecera `x-death` (`reason: rejected`).
+
+---
+
+## 8. Base de Datos y Migraciones Flyway
+
+Archivo: `src/main/resources/db/migration/V1__create_notify_tables.sql`
+
+| Tabla | Propósito |
 |---|---|
-| Mensaje válido y procesado correctamente | `basicAck(deliveryTag, false)` |
-| Mensaje duplicado (eventId ya procesado) | `basicAck(deliveryTag, false)` — sin reprocesar |
-| Envelope inválido (campos null/blank) | `basicNack(deliveryTag, false, false)` → DLQ |
-| Type no soportado | `basicNack(deliveryTag, false, false)` → DLQ |
-| Error de procesamiento tras agotar reintentos | `basicNack(deliveryTag, false, false)` → DLQ |
-
-- **`requeue = false`** siempre en NACK → evita requeue infinito.
-- El mensaje rechazado va a la DLQ correspondiente (`q.cmd.email.dlq`, `q.cmd.crew.dlq`, `q.cmd.quote.dlq`) gracias a la DLX (`cmd.dead.dlx`) configurada en los beans y en `definitions.json`.
-
-### Retries controlados
-
-Se utiliza **Spring Retry** (`RetryTemplate`) de forma programática:
-- **`maxAttempts = 3` intentos totales** por defecto (`NOTIFY_RETRY_MAX_ATTEMPTS`), compuestos por **1 intento inicial + 2 reintentos adicionales** (no confundir con 3 reintentos adicionales).
-- **Backoff fijo:** 500 ms por defecto (`NOTIFY_RETRY_INITIAL_INTERVAL_MS`).
-- Si un intento funciona, se marca el `eventId` como procesado y se ejecuta `basicAck`.
-- Si se agotan los 3 intentos totales, el mensaje no se marca como procesado y recibe `basicNack(deliveryTag, false, false)`, derivando el mensaje a su DLQ (`q.cmd.email.dlq`, `q.cmd.crew.dlq` o `q.cmd.quote.dlq`).
-- Mensajes con JSON inválido, sobre incompleto o `type` no soportado no se reintentan y van directo a DLQ.
+| `processed_events` | Registro de idempotencia (`event_id` PK, `consumer_name`, `processed_at`) para evitar efectos duplicados. |
+| `crew_tickets` | Almacena tickets técnicos generados por `q.cmd.crew` (`ticket_code`, `production_id`, `production_name`, `scheduled_at`, `location`, `event_id`). |
+| `notification_delivery_audit` | Bitácora de envíos y fallos de notificaciones por correo (`event_id`, `production_id`, `recipient`, `status`, `provider`, `error_message`). |
 
 ---
 
-## Idempotencia
+## 9. Variables de Entorno Requeridas
 
-Se implementa idempotencia por **`eventId`** mediante la abstracción `ProcessedEventStore`.
-
-**Implementación actual:** `InMemoryProcessedEventStore` (basada en `ConcurrentHashMap.newKeySet()`).
-
-**Reglas:**
-1. Si el `eventId` NO está procesado → ejecutar servicio.
-2. Marcar como procesado **SOLO** después de éxito.
-3. Si el servicio falla → NO marcar como procesado → NACK.
-4. Si llega un `eventId` ya procesado → log de duplicado ignorado → ACK.
-
-> **⚠️ Limitación:** La idempotencia in-memory **NO es durable**. Se pierde al reiniciar el contenedor.
-> Una solución persistente/distribuida (Redis, base de datos) queda fuera de este incremento.
-> **NO** se agrega una base de datos solo para resolver esto.
-
----
-
-## Trazabilidad (MDC)
-
-Durante el procesamiento de cada mensaje:
-
-- `traceId` → colocado en MDC
-- `correlationId` → colocado en MDC
-
-Se limpia con `try/finally` al terminar cada mensaje para evitar contaminación entre mensajes.
+| Variable | Ejemplo Placeholder | Descripción |
+|---|---|---|
+| `DB_URL` | `jdbc:postgresql://localhost:5432/eventomax_notify` | URL JDBC PostgreSQL |
+| `DB_USER` | `notify_user` | Usuario PostgreSQL |
+| `DB_PASSWORD` | `<SECRET_DB_PASSWORD>` | Contraseña PostgreSQL |
+| `SPRING_RABBITMQ_ADDRESSES` | `rabbitmq-1:5672,rabbitmq-2:5672` | Nodos del clúster RabbitMQ en Docker/AWS |
+| `RABBITMQ_HOST` | `localhost` | Host RabbitMQ individual (fallback local) |
+| `RABBITMQ_PORT` | `5672` (o `25692` en demo local) | Puerto AMQP |
+| `RABBITMQ_VHOST` | `/` | Virtual host RabbitMQ |
+| `RABBITMQ_USERNAME` | `<RABBITMQ_APP_USER>` | Usuario de aplicación RabbitMQ |
+| `RABBITMQ_PASSWORD` | `<SECRET_RABBITMQ_PASSWORD>` | Contraseña RabbitMQ |
+| `CATALOG_BASE_URL` | `http://ms-eventomax-catalog:8080` | URL de Catalog para enriquecimiento referencial de inventario |
+| `NOTIFY_QUOTE_OUTPUT_DIR` | `/data/quotes` | Directorio de salida para actas PDF generadas |
+| `STORAGE_LOCAL_BASE_DIR` | `/data/quotes` | Directorio base del proveedor de almacenamiento local |
 
 ---
 
-## Variables de entorno
-
-| Variable | Descripción |
-|---|---|
-| `RABBITMQ_HOST` | Host de RabbitMQ |
-| `RABBITMQ_PORT` | Puerto de RabbitMQ |
-| `RABBITMQ_USERNAME` | Usuario de RabbitMQ |
-| `RABBITMQ_PASSWORD` | Contraseña de RabbitMQ |
-
-**Nota:** `application.yml` mantiene defaults orientados al desarrollo local para `RABBITMQ_HOST` (`localhost`) y `RABBITMQ_PORT` (`5672`), mientras que usuario y contraseña quedan vacíos si no se proporcionan. En producción, `docker-compose.prod.yml` exige explícitamente `RABBITMQ_HOST`, `RABBITMQ_USERNAME` y `RABBITMQ_PASSWORD`, evitando que el despliegue cloud dependa de los defaults locales.
-
-Ver `.env.example` para la configuración Docker local y `.env.prod.example` para la plantilla de producción.
-
----
-
-## Ejecución local
-
-### Prerrequisitos
-
-- Java 25
-- RabbitMQ corriendo (desde `infra-eventomax`)
-
-### Compilar y ejecutar tests
+## 10. Ejecución Local Paso a Paso
 
 ```bash
-.\mvnw.cmd clean package
-```
+export DB_URL="jdbc:postgresql://localhost:5432/eventomax_notify"
+export DB_USER="postgres"
+export DB_PASSWORD="<TU_PASSWORD_LOCAL>"
+export RABBITMQ_HOST="localhost"
+export RABBITMQ_PORT="25692"
+export RABBITMQ_USERNAME="eventomax-app"
+export RABBITMQ_PASSWORD="<TU_PASSWORD_RABBIT>"
+export CATALOG_BASE_URL="http://localhost:8080"
+export NOTIFY_QUOTE_OUTPUT_DIR="./data/quotes"
+export STORAGE_LOCAL_BASE_DIR="./data/quotes"
 
-### Ejecutar la aplicación
-
-```bash
-.\mvnw.cmd spring-boot:run
-```
-
-La aplicación se levanta en el puerto **8080** y se conecta a RabbitMQ en `localhost:5672`.
-
-### Actuator
-
-```
-GET http://localhost:8080/actuator/health
-```
-
-Devuelve `UP` cuando RabbitMQ está disponible y autenticado correctamente.
-
----
-
-## Ejecución Docker
-
-### Build
-
-```bash
-docker compose build
-```
-
-### Run
-
-```bash
-docker compose up -d
-```
-
-- Host port: **8083** → container port: **8080**
-- Requiere que RabbitMQ esté corriendo en la red Docker (provisto por `infra-eventomax`).
-
-### Variables
-
-Configurar en archivo `.env` (no versionado):
-
-```
-RABBITMQ_HOST=host.docker.internal
-RABBITMQ_PORT=5672
-RABBITMQ_USERNAME=<tu-usuario>
-RABBITMQ_PASSWORD=<tu-password>
+mvn spring-boot:run
 ```
 
 ---
 
-## Producción / AWS
+## 11. Ejecución de Pruebas Automatizadas
 
-- Notify se ejecuta en AWS EC2 mediante Docker.
-- Es un consumidor interno y NO es público.
-- No debe existir port mapping público.
-- RabbitMQ se alcanza mediante dirección privada/configurada con `RABBITMQ_HOST`.
-- No utilizar `localhost` ni `host.docker.internal` en cloud.
-- Credenciales mediante variables de entorno / mecanismo seguro.
-- Usa `docker-compose.prod.yml`.
-- Usa `.env.prod.example` únicamente como plantilla sin secretos.
-- Pertenece a `eventomax-net`.
+```bash
+# Ejecutar suite completa de pruebas unitarias, contractuales y de generación PDF (82 tests)
+mvn clean test
 
-**Flujo conceptual:**
+# Ejecutar prueba de integración en vivo de NACK y DLQ contra broker real
+mvn test -Dtest=QuoteCommandDlqLiveIT
+```
+
+**Resultado certificado en EP2:** `Tests run: 82, Failures: 0, Errors: 0, Skipped: 0 — BUILD SUCCESS`.
+
+---
+
+## 12. Construcción y Despliegue Docker / Preparación Cloud
+
+```bash
+# Construir imagen multi-stage con usuario no-root y volumen /data/quotes
+docker build -t ms-eventomax-notify:ep2 .
+
+# Levantar en la red compartida eventomax-net
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+---
+
+## 13. Estructura del Proyecto
 
 ```text
-ms-eventomax-productions
-        |
-        v
-RabbitMQ AWS
-   |            |            |
-   v            v            v
-q.cmd.email  q.cmd.crew  q.cmd.quote
-   \            |            /
-    v           v           v
-       ms-eventomax-notify
-```
-
-Aclaración: RabbitMQ puede estar en infraestructura EC2 separada, pero la comunicación debe ocurrir mediante conectividad privada de AWS/VPC.
-
----
-
-## Arquitectura
-
-```
-src/main/java/cl/duoc/eventomax/notify/
-├── MsEventomaxNotifyApplication.java       # Entrada Spring Boot
-├── config/
-│   ├── RabbitMQConfig.java                 # Topología RabbitMQ (3 exchanges, 6 colas, 9 bindings)
-│   └── NotificationRetryConfig.java        # RetryTemplate (3 intentos totales = 1 inicial + 2 reintentos)
-├── messaging/
-│   ├── common/
-│   │   └── MessageEnvelope.java            # Envelope genérico
-│   ├── email/
-│   │   ├── EmailProductionStatusPayload.java   # Payload de email
-│   │   └── EmailCommandListener.java       # Consumidor q.cmd.email
-│   ├── crew/
-│   │   ├── CrewTicketPayload.java          # Payload de ticket de cuadrilla
-│   │   └── CrewCommandListener.java        # Consumidor q.cmd.crew
-│   └── quote/
-│       ├── QuoteCommandPayload.java        # Payload de cotización/resumen PDF de cierre
-│       └── QuoteCommandListener.java       # Consumidor q.cmd.quote
-├── service/
-│   ├── EmailNotificationService.java       # Servicio de email
-│   ├── CrewTicketNotificationService.java  # Servicio de cuadrilla
-│   └── QuoteNotificationService.java       # Servicio de cotización PDF
-├── sender/
-│   ├── EmailSender.java                    # Interfaz de envío email
-│   ├── LoggingEmailSender.java             # Implementación simulada email
-│   ├── CrewTicketSender.java               # Interfaz de envío cuadrilla
-│   ├── LoggingCrewTicketSender.java        # Implementación simulada cuadrilla
-│   ├── QuoteGenerator.java                 # Interfaz de generación PDF
-│   └── PdfQuoteGenerator.java              # Generador real de PDF 1.4 en disco
-└── idempotency/
-    ├── ProcessedEventStore.java            # Interfaz de idempotencia
-    └── InMemoryProcessedEventStore.java    # Implementación in-memory
+ms-eventomax-notify/
+├── src/main/java/cl/duoc/eventomax/notify/
+│   ├── client/               # CatalogEquipmentClient (consulta resiliente de stock)
+│   ├── config/               # RabbitMQTopologyConfig (exchanges, colas, DLX/DLQ, RetryTemplate)
+│   ├── controller/           # NotifyQuoteController, NotifyTicketController
+│   ├── document/             # ProductionClosureDocumentBuilder, OpenPdfClosureDocumentGenerator
+│   ├── dto/document/         # ProductionClosureDocumentDTO
+│   ├── idempotency/          # ProcessedEventStore, DatabaseProcessedEventStore
+│   ├── messaging/
+│   │   ├── common/           # MessageEnvelope<T>
+│   │   ├── crew/             # CrewTicketCommandListener, CrewTicketPayload
+│   │   ├── email/            # EmailCommandListener, EmailProductionStatusPayload
+│   │   └── quote/            # QuoteCommandListener, QuoteCommandPayload
+│   ├── model/                # CrewTicketEntity, ProcessedEventEntity, NotificationDeliveryAuditEntity
+│   ├── repository/           # Repositorios Spring Data JPA
+│   ├── sender/               # SmtpEmailSender, LoggingEmailSender, DatabaseCrewTicketSender
+│   ├── service/              # QuoteNotificationService, CrewTicketNotificationService, EmailNotificationService
+│   └── storage/              # DocumentStorageService (Local / S3)
+├── src/main/resources/
+│   ├── branding/             # Logo corporativo EventoMax
+│   ├── db/migration/         # V1__create_notify_tables.sql
+│   ├── fonts/                # Roboto-Regular.ttf, Roboto-Bold.ttf
+│   └── application.yml
+├── Dockerfile
+└── docker-compose.prod.yml
 ```
 
 ---
 
-## Tests
+## 14. Flujo Funcional Demostrado en EP2
 
-| Test | Qué valida |
-|---|---|
-| **A.** Mensaje válido | Procesa, marca idempotencia, ACK (`email`, `crew`, `quote`) |
-| **B.** Duplicado | No reprocesa, ACK |
-| **C.** Type inválido | No procesa, NACK → DLQ |
-| **D.** Envelope inválido | No procesa, NACK → DLQ |
-| **E.** Error del servicio | Reintenta hasta 3 intentos totales, no marca procesado, NACK → DLQ |
-| **F.** Servicio / PDF | Delega a Sender y valida generación real de PDF 1.4 (`%PDF-1.4`, `xref`, `%%EOF`) |
-| **G.** Idempotencia | `InMemoryProcessedEventStore`: atomicidad `processOnce`, thread-safety |
-| **H.** Integración RabbitMQ | `EmailRetryRabbitIT` con Testcontainers (`rabbitmq:4.3.6-management`, 19 escenarios reales aislados) |
+1. Al cerrar una producción en `ms-eventomax-productions`, se publica el comando `GenerateClosingQuote` en `cmd.direct` (`quote.gen`).
+2. `QuoteCommandListener` recibe el mensaje desde `q.cmd.quote`, verifica en `processed_events` que el `eventId` no haya sido procesado y delega en `QuoteNotificationService`.
+3. `ProductionClosureDocumentBuilder` combina los datos del payload con una consulta resiliente a `ms-eventomax-catalog` (marcando explícitamente `CONSULTADO`, `CATALOGO_SIN_EQUIPOS` o `NO_DISPONIBLE_TEMPORALMENTE` sin inventar cifras).
+4. `OpenPdfClosureDocumentGenerator` renderiza el PDF de 2 páginas (`quote-production-{id}-{eventId}.pdf` y `quote-production-{id}-latest.pdf`), calcula su huella `SHA-256`, persiste la marca de idempotencia y emite `channel.basicAck(deliveryTag, false)`.
 
 ---
 
-## Fuera de alcance (este incremento)
+## 15. Troubleshooting y Errores Comunes
 
-- ❌ Envío de email real (SMTP, SES, SendGrid, etc.)
-- ❌ Persistencia de idempotencia (Redis, base de datos)
-- ❌ API pública / controllers REST
-- ❌ Base de datos
-- ❌ Spring Security
-- ❌ OpenAPI
+- **Mensaje derivado a `q.cmd.quote.dlq`:** Inspeccione las cabeceras `x-death` y el cuerpo del mensaje en RabbitMQ Management; ocurre cuando `type != GenerateClosingQuote` o faltan campos obligatorios (`productionId`, `status`).
+- **Estado `NO_DISPONIBLE_TEMPORALMENTE` en la sección de catálogo del PDF:** Indica que `ms-eventomax-catalog` no respondió dentro del timeout configurado (3 s). El generador degrada de forma controlada sin abortar el cierre ni enviar el mensaje a DLQ.
 
 ---
 
-## Stack técnico
+## 16. Estado Actual de Certificación EP2
 
-- Java 25
-- Spring Boot 4.1.1
-- Spring AMQP (RabbitMQ)
-- Spring Actuator
-- Maven
+- **Pruebas Automatizadas:** `82/82` aprobadas (`QuoteCommandCrossContractTest`, `OpenPdfClosureDocumentGeneratorTest`, `ProductionClosureDocumentBuilderTest`, `QuoteNotificationServiceTest`, `EmailCommandListenerTest`, `CrewTicketCommandListenerTest`, `FlywayNotifyPreflightTest`).
+- **Certificación en Vivo (B3/B4):** Generación PDF real verificada (`139,158 bytes`, `%PDF-1.5`) y derivación DLQ real verificada (`QuoteCommandDlqLiveIT`).
+
+---
+
+## 17. Trazabilidad Jira / Historias Relacionadas
+
+- **EP2-FIX-PDF-01-B1:** Persistencia de tickets de cuadrilla, descarga de actas PDF e idempotencia en base de datos (`V1`).
+- **EP2-FIX-PDF-01-B2.1 / PRE-B3:** Ensamblador documental, semántica UTC de `closedAt` y motor OpenPDF empresarial.
+- **EP2-FIX-PDF-01-B3 / B4:** Integración end-to-end RabbitMQ → Notify → OpenPDF y certificación de NACK/DLQ en broker real.

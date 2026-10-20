@@ -23,6 +23,6 @@ public class CrewTicketNotificationService {
                 envelope.payload().productionId(),
                 envelope.payload().status());
 
-        crewTicketSender.send(envelope.payload());
+        crewTicketSender.send(envelope.payload(), envelope.eventId());
     }
 }

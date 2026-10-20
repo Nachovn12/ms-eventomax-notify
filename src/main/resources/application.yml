@@ -1,34 +1,75 @@
 spring:
   application:
     name: ms-eventomax-notify
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:eventomax_notify}}}
+    username: ${SPRING_DATASOURCE_USERNAME:${DB_USER:notify_user}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:}}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: public
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    locations: classpath:db/migration
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
+    virtual-host: ${RABBITMQ_VHOST:/}
     username: ${RABBITMQ_USERNAME:}
     password: ${RABBITMQ_PASSWORD:}
     listener:
       simple:
         acknowledge-mode: manual
         default-requeue-rejected: false
+  mail:
+    host: ${SPRING_MAIL_HOST:${SMTP_HOST:127.0.0.1}}
+    port: ${SPRING_MAIL_PORT:${SMTP_PORT:1025}}
+    username: ${SPRING_MAIL_USERNAME:${SMTP_USERNAME:}}
+    password: ${SPRING_MAIL_PASSWORD:${SMTP_PASSWORD:}}
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:${SMTP_AUTH:false}}
+          starttls:
+            enable: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:${SMTP_STARTTLS:false}}
+            required: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED:${SMTP_STARTTLS_REQUIRED:false}}
+          connectiontimeout: ${SMTP_TIMEOUT_MS:5000}
+          timeout: ${SMTP_TIMEOUT_MS:5000}
+          writetimeout: ${SMTP_TIMEOUT_MS:5000}
 
 management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,info
   endpoint:
     health:
       show-details: always
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8083}
 
 eventomax:
   notify:
     retry:
-      # 3 intentos totales = 1 intento inicial + 2 reintentos adicionales antes de NACK a DLQ
       max-attempts: ${NOTIFY_RETRY_MAX_ATTEMPTS:3}
       initial-interval-ms: ${NOTIFY_RETRY_INITIAL_INTERVAL_MS:500}
+    mail:
+      from: ${NOTIFY_MAIL_FROM:no-reply@eventomax.cl}
+      from-name: ${NOTIFY_MAIL_FROM_NAME:EventoMax Notificaciones}
     quote:
       output-dir: ${NOTIFY_QUOTE_OUTPUT_DIR:./data/quotes}
-
+    storage:
+      provider: ${STORAGE_PROVIDER:local}
+      local:
+        base-dir: ${STORAGE_LOCAL_BASE_DIR:./data/quotes}
+      s3:
+        bucket-name: ${STORAGE_S3_BUCKET:eventomax-private-documents}
+        region: ${STORAGE_S3_REGION:us-east-1}
+        prefix: ${STORAGE_S3_PREFIX:quotes/}

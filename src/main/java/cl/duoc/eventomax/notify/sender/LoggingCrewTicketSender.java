@@ -3,9 +3,11 @@ package cl.duoc.eventomax.notify.sender;
 import cl.duoc.eventomax.notify.messaging.crew.CrewTicketPayload;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(name = "eventomax.notify.crew.provider", havingValue = "logging")
 public class LoggingCrewTicketSender implements CrewTicketSender {
 
     private static final Logger log = LoggerFactory.getLogger(LoggingCrewTicketSender.class);

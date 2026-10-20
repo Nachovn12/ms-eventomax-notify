@@ -34,6 +34,6 @@ class CrewTicketNotificationServiceTest {
 
         service.processCrewTicket(envelope);
 
-        verify(crewTicketSender, times(1)).send(payload);
+        verify(crewTicketSender, times(1)).send(payload, "evt-1");
     }
 }

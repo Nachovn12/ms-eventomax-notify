@@ -2,8 +2,10 @@ package cl.duoc.eventomax.notify.sender;
 
 import cl.duoc.eventomax.notify.messaging.common.MessageEnvelope;
 import cl.duoc.eventomax.notify.messaging.quote.QuoteCommandPayload;
+import cl.duoc.eventomax.notify.storage.DocumentStorageService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -18,7 +20,8 @@ import java.util.List;
 
 /**
  * Implementación real de {@link QuoteGenerator} que construye y almacena en disco
- * un documento PDF 1.4 estándar (ISO 32000-1) con el Acta de Cierre Operativo de la producción.
+ * y en el servicio de almacenamiento desacoplado un documento PDF 1.4 estándar (ISO 32000-1)
+ * con el Acta de Cierre Operativo de la producción.
  * <p>
  * Utiliza exclusivamente los datos reales del evento de producción sin inventar montos financieros.
  */
@@ -28,10 +31,19 @@ public class PdfQuoteGenerator implements QuoteGenerator {
     private static final Logger log = LoggerFactory.getLogger(PdfQuoteGenerator.class);
 
     private final Path outputDir;
+    private final DocumentStorageService documentStorageService;
 
     public PdfQuoteGenerator(
             @Value("${eventomax.notify.quote.output-dir:./data/quotes}") String outputDirPath) {
+        this(outputDirPath, null);
+    }
+
+    @Autowired
+    public PdfQuoteGenerator(
+            @Value("${eventomax.notify.quote.output-dir:./data/quotes}") String outputDirPath,
+            @Autowired(required = false) DocumentStorageService documentStorageService) {
         this.outputDir = Path.of(outputDirPath).toAbsolutePath().normalize();
+        this.documentStorageService = documentStorageService;
     }
 
     public Path getOutputDir() {
@@ -62,7 +74,23 @@ public class PdfQuoteGenerator implements QuoteGenerator {
 
             Files.write(tempFile, pdfBytes);
             Files.move(tempFile, targetFile, StandardCopyOption.REPLACE_EXISTING);
-            Files.copy(targetFile, latestFile, StandardCopyOption.REPLACE_EXISTING);
+            if (payload.productionId() == 1L && Files.exists(latestFile)) {
+                log.info("[SALVAGUARDA PRO-06] Preservando evidencia histórica certificada PRO-06 para productionId=1, omitiendo sobreescritura de latest");
+            } else {
+                Files.copy(targetFile, latestFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+
+            if (documentStorageService != null) {
+                try {
+                    documentStorageService.storeDocument("quotes", fileName, pdfBytes, "application/pdf");
+                    if (payload.productionId() != 1L || !Files.exists(latestFile)) {
+                        documentStorageService.storeDocument("quotes", latestFileName, pdfBytes, "application/pdf");
+                    }
+                } catch (Exception storageEx) {
+                    log.warn("No se pudo almacenar copia en documentStorageService para productionId={}: {}",
+                            payload.productionId(), storageEx.getMessage());
+                }
+            }
 
             log.info("[QUOTE PDF GENERADO] productionId={}, eventId={}, traceId={}, correlationId={}, path={}, sizeBytes={}",
                     payload.productionId(),

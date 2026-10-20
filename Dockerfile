@@ -10,6 +10,21 @@ RUN ./mvnw clean package -DskipTests -B
 # Stage 2: Runtime
 FROM eclipse-temurin:25-jre
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --system appgroup && \
+    useradd --system --gid appgroup --no-create-home appuser && \
+    mkdir -p /data/quotes && chown -R appuser:appgroup /data/quotes /app
+
+COPY --from=build --chown=appuser:appgroup /app/target/*.jar app.jar
+
+ENV SERVER_PORT=8080
+USER appuser
 EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD curl --fail http://localhost:8080/actuator/health || exit 1
+
 ENTRYPOINT ["java", "-jar", "app.jar"]

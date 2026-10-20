@@ -1,0 +1,36 @@
+services:
+  ms-eventomax-notify:
+    build:
+      context: .
+    container_name: ms-eventomax-notify
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      DB_URL: ${DB_URL:?DB_URL is required}
+      DB_USER: ${DB_USER:?DB_USER is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      SPRING_RABBITMQ_ADDRESSES: ${SPRING_RABBITMQ_ADDRESSES:-rabbitmq-1:5672,rabbitmq-2:5672}
+      RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq-1}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:?RABBITMQ_USERNAME is required}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      CATALOG_BASE_URL: ${CATALOG_BASE_URL:-http://ms-eventomax-catalog:8080}
+      NOTIFY_QUOTE_OUTPUT_DIR: ${NOTIFY_QUOTE_OUTPUT_DIR:-/data/quotes}
+      STORAGE_LOCAL_BASE_DIR: ${STORAGE_LOCAL_BASE_DIR:-/data/quotes}
+      NOTIFY_RETRY_MAX_ATTEMPTS: ${NOTIFY_RETRY_MAX_ATTEMPTS:-3}
+      NOTIFY_RETRY_INITIAL_INTERVAL_MS: ${NOTIFY_RETRY_INITIAL_INTERVAL_MS:-500}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:InitialRAMPercentage=25.0 -XX:MaxRAMPercentage=65.0 -XX:+ExitOnOutOfMemoryError}
+    volumes:
+      - notify-quotes-data:/data/quotes
+    networks:
+      - eventomax-net
+    restart: unless-stopped
+
+volumes:
+  notify-quotes-data:
+
+networks:
+  eventomax-net:
+    external: true

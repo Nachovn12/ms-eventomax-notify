@@ -33,6 +33,20 @@ public class RabbitMQConfig {
     public static final String RK_EMAIL_TOPIC = "email.*";
     public static final String RK_EMAIL_DLQ = "q.cmd.email.dlq";
 
+    public static final String Q_CMD_CREW = "q.cmd.crew";
+    public static final String Q_CMD_CREW_DLQ = "q.cmd.crew.dlq";
+
+    public static final String RK_CREW_TICKET = "crew.ticket";
+    public static final String RK_CREW_TOPIC = "crew.#";
+    public static final String RK_CREW_DLQ = "q.cmd.crew.dlq";
+
+    public static final String Q_CMD_QUOTE = "q.cmd.quote";
+    public static final String Q_CMD_QUOTE_DLQ = "q.cmd.quote.dlq";
+
+    public static final String RK_QUOTE_GEN = "quote.gen";
+    public static final String RK_QUOTE_TOPIC = "quote.*";
+    public static final String RK_QUOTE_DLQ = "q.cmd.quote.dlq";
+
     // --- Exchanges ---
 
     @Bean
@@ -65,6 +79,32 @@ public class RabbitMQConfig {
         return QueueBuilder.durable(Q_CMD_EMAIL_DLQ).build();
     }
 
+    @Bean
+    public Queue qCmdCrew() {
+        return QueueBuilder.durable(Q_CMD_CREW)
+                .withArgument("x-dead-letter-exchange", CMD_DEAD_DLX_EXCHANGE)
+                .withArgument("x-dead-letter-routing-key", RK_CREW_DLQ)
+                .build();
+    }
+
+    @Bean
+    public Queue qCmdCrewDlq() {
+        return QueueBuilder.durable(Q_CMD_CREW_DLQ).build();
+    }
+
+    @Bean
+    public Queue qCmdQuote() {
+        return QueueBuilder.durable(Q_CMD_QUOTE)
+                .withArgument("x-dead-letter-exchange", CMD_DEAD_DLX_EXCHANGE)
+                .withArgument("x-dead-letter-routing-key", RK_QUOTE_DLQ)
+                .build();
+    }
+
+    @Bean
+    public Queue qCmdQuoteDlq() {
+        return QueueBuilder.durable(Q_CMD_QUOTE_DLQ).build();
+    }
+
     // --- Bindings ---
 
     @Bean
@@ -88,4 +128,47 @@ public class RabbitMQConfig {
                 .with(RK_EMAIL_DLQ);
     }
 
+    @Bean
+    public Binding bindingDirectCrew() {
+        return BindingBuilder.bind(qCmdCrew())
+                .to(cmdDirectExchange())
+                .with(RK_CREW_TICKET);
+    }
+
+    @Bean
+    public Binding bindingTopicCrew() {
+        return BindingBuilder.bind(qCmdCrew())
+                .to(cmdTopicExchange())
+                .with(RK_CREW_TOPIC);
+    }
+
+    @Bean
+    public Binding bindingDlqCrew() {
+        return BindingBuilder.bind(qCmdCrewDlq())
+                .to(cmdDeadDlxExchange())
+                .with(RK_CREW_DLQ);
+    }
+
+    @Bean
+    public Binding bindingDirectQuote() {
+        return BindingBuilder.bind(qCmdQuote())
+                .to(cmdDirectExchange())
+                .with(RK_QUOTE_GEN);
+    }
+
+    @Bean
+    public Binding bindingTopicQuote() {
+        return BindingBuilder.bind(qCmdQuote())
+                .to(cmdTopicExchange())
+                .with(RK_QUOTE_TOPIC);
+    }
+
+    @Bean
+    public Binding bindingDlqQuote() {
+        return BindingBuilder.bind(qCmdQuoteDlq())
+                .to(cmdDeadDlxExchange())
+                .with(RK_QUOTE_DLQ);
+    }
+
 }
+

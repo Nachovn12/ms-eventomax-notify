@@ -24,7 +24,8 @@ import java.nio.file.StandardCopyOption;
  * <p>
  * Cablea la transformación estructurada con {@link ProductionClosureDocumentBuilder}
  * y el motor empresarial {@link OpenPdfClosureDocumentGenerator}, manteniendo
- * {@link QuoteGenerator} como estrategia de fallback con limitaciones declaradas.
+ * {@link QuoteGenerator} como estrategia de fallback con limitaciones declaradas
+ * o como proveedor explícito en modo {@code legacy} para pruebas de contrato/reintento.
  */
 @Service
 public class QuoteNotificationService {
@@ -36,6 +37,7 @@ public class QuoteNotificationService {
     private final QuoteGenerator fallbackQuoteGenerator;
     private final DocumentStorageService documentStorageService;
     private final Path outputDir;
+    private final String quoteProvider;
 
     @Autowired
     public QuoteNotificationService(
@@ -43,16 +45,27 @@ public class QuoteNotificationService {
             @Autowired(required = false) OpenPdfClosureDocumentGenerator openPdfGenerator,
             @Autowired(required = false) QuoteGenerator fallbackQuoteGenerator,
             @Autowired(required = false) DocumentStorageService documentStorageService,
-            @Value("${eventomax.notify.quote.output-dir:./data/quotes}") String outputDirPath) {
+            @Value("${eventomax.notify.quote.output-dir:./data/quotes}") String outputDirPath,
+            @Value("${eventomax.notify.quote.provider:enterprise}") String quoteProvider) {
         this.documentBuilder = documentBuilder;
         this.openPdfGenerator = openPdfGenerator;
         this.fallbackQuoteGenerator = fallbackQuoteGenerator;
         this.documentStorageService = documentStorageService;
         this.outputDir = Path.of(outputDirPath).toAbsolutePath().normalize();
+        this.quoteProvider = (quoteProvider != null && !quoteProvider.isBlank()) ? quoteProvider.trim() : "enterprise";
+    }
+
+    public QuoteNotificationService(
+            ProductionClosureDocumentBuilder documentBuilder,
+            OpenPdfClosureDocumentGenerator openPdfGenerator,
+            QuoteGenerator fallbackQuoteGenerator,
+            DocumentStorageService documentStorageService,
+            String outputDirPath) {
+        this(documentBuilder, openPdfGenerator, fallbackQuoteGenerator, documentStorageService, outputDirPath, "enterprise");
     }
 
     public QuoteNotificationService(QuoteGenerator fallbackQuoteGenerator) {
-        this(null, null, fallbackQuoteGenerator, null, "./data/quotes");
+        this(null, null, fallbackQuoteGenerator, null, "./data/quotes", "legacy");
     }
 
     public Path getOutputDir() {
@@ -68,13 +81,14 @@ public class QuoteNotificationService {
             throw new IllegalArgumentException("productionId inválido para generación de acta PDF");
         }
 
-        log.info("Procesando comando de generación de acta PDF: productionId={}, status={}, traceId={}, correlationId={}",
+        log.info("Procesando comando de generación de acta PDF: productionId={}, status={}, provider={}, traceId={}, correlationId={}",
                 payload.productionId(),
                 payload.status(),
+                quoteProvider,
                 envelope.traceId(),
                 envelope.correlationId());
 
-        if (documentBuilder != null && openPdfGenerator != null) {
+        if (!"legacy".equalsIgnoreCase(quoteProvider) && documentBuilder != null && openPdfGenerator != null) {
             try {
                 return generateEnterprisePdf(envelope);
             } catch (Exception e) {
@@ -88,7 +102,7 @@ public class QuoteNotificationService {
         }
 
         if (fallbackQuoteGenerator != null) {
-            log.info("Invocando generador legacy directo (sin builder/openPdfGenerator)");
+            log.info("Invocando generador QuoteGenerator configurado (provider={})", quoteProvider);
             return fallbackQuoteGenerator.generate(envelope);
         }
 

@@ -5,11 +5,17 @@ services:
     container_name: ms-eventomax-notify
     expose:
       - "8080"
+    mem_limit: 640m
     environment:
       SERVER_PORT: ${SERVER_PORT:-8080}
       DB_URL: ${DB_URL:?DB_URL is required}
       DB_USER: ${DB_USER:?DB_USER is required}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      FLYWAY_ENABLED: ${FLYWAY_ENABLED:-true}
+      SPRING_FLYWAY_DEFAULT_SCHEMA: ${SPRING_FLYWAY_DEFAULT_SCHEMA:-notify}
+      SPRING_FLYWAY_SCHEMAS: ${SPRING_FLYWAY_SCHEMAS:-notify}
+      SPRING_FLYWAY_CREATE_SCHEMAS: ${SPRING_FLYWAY_CREATE_SCHEMAS:-true}
+      SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA: ${SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA:-notify}
       SPRING_RABBITMQ_ADDRESSES: ${SPRING_RABBITMQ_ADDRESSES:-rabbitmq-1:5672,rabbitmq-2:5672}
       RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq-1}
       RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
@@ -17,11 +23,31 @@ services:
       RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:?RABBITMQ_USERNAME is required}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
       CATALOG_BASE_URL: ${CATALOG_BASE_URL:-http://ms-eventomax-catalog:8080}
+      EVENTOMAX_NOTIFY_EMAIL_PROVIDER: ${EVENTOMAX_NOTIFY_EMAIL_PROVIDER:-logging}
+      EVENTOMAX_NOTIFY_CREW_PROVIDER: ${EVENTOMAX_NOTIFY_CREW_PROVIDER:-database}
+      EVENTOMAX_NOTIFY_QUOTE_PROVIDER: ${EVENTOMAX_NOTIFY_QUOTE_PROVIDER:-enterprise}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_AUTH: ${SMTP_AUTH:-false}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
+      SMTP_STARTTLS_REQUIRED: ${SMTP_STARTTLS_REQUIRED:-false}
+      SMTP_TIMEOUT_MS: ${SMTP_TIMEOUT_MS:-5000}
+      NOTIFY_MAIL_FROM: ${NOTIFY_MAIL_FROM:-no-reply@eventomax.cl}
+      NOTIFY_MAIL_FROM_NAME: ${NOTIFY_MAIL_FROM_NAME:-EventoMax Notificaciones}
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
       NOTIFY_QUOTE_OUTPUT_DIR: ${NOTIFY_QUOTE_OUTPUT_DIR:-/data/quotes}
       STORAGE_LOCAL_BASE_DIR: ${STORAGE_LOCAL_BASE_DIR:-/data/quotes}
       NOTIFY_RETRY_MAX_ATTEMPTS: ${NOTIFY_RETRY_MAX_ATTEMPTS:-3}
       NOTIFY_RETRY_INITIAL_INTERVAL_MS: ${NOTIFY_RETRY_INITIAL_INTERVAL_MS:-500}
       JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:InitialRAMPercentage=25.0 -XX:MaxRAMPercentage=65.0 -XX:+ExitOnOutOfMemoryError}
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:8080/actuator/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
     volumes:
       - notify-quotes-data:/data/quotes
     networks:

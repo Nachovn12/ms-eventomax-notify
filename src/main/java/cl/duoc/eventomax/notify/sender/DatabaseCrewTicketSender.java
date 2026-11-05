@@ -8,7 +8,6 @@ import cl.duoc.eventomax.notify.repository.NotificationDeliveryAuditRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,7 +18,6 @@ import java.time.ZoneId;
 import java.util.UUID;
 
 @Component
-@Primary
 @ConditionalOnProperty(name = "eventomax.notify.crew.provider", havingValue = "database", matchIfMissing = true)
 public class DatabaseCrewTicketSender implements CrewTicketSender {
 
@@ -113,4 +111,3 @@ public class DatabaseCrewTicketSender implements CrewTicketSender {
         }
     }
 }
-

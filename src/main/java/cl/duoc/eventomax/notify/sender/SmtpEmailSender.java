@@ -10,7 +10,6 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Primary;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -19,7 +18,6 @@ import org.springframework.stereotype.Component;
 import java.io.UnsupportedEncodingException;
 
 @Component
-@Primary
 @ConditionalOnProperty(name = "eventomax.notify.email.provider", havingValue = "smtp", matchIfMissing = true)
 public class SmtpEmailSender implements EmailSender {
 
@@ -228,4 +226,3 @@ public class SmtpEmailSender implements EmailSender {
                 .replace("'", "&#39;");
     }
 }
-

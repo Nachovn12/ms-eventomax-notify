@@ -23,7 +23,7 @@
 
 ```mermaid
 flowchart LR
-    subgraph RabbitMQ Broker
+    subgraph group1["RabbitMQ Broker"]
         EX["Exchange: cmd.direct"]
         Q_QUOTE["q.cmd.quote"]
         Q_CREW["q.cmd.crew"]
@@ -34,23 +34,23 @@ flowchart LR
         DLQ_EMAIL["q.cmd.email.dlq"]
     end
 
-    subgraph ms-eventomax-notify
-        L_QUOTE["QuoteCommandListener\n(MANUAL ACK/NACK)"]
-        L_CREW["CrewTicketCommandListener\n(MANUAL ACK/NACK)"]
-        L_EMAIL["EmailCommandListener\n(MANUAL ACK/NACK + Retry)"]
-        IDEMP["DatabaseProcessedEventStore\n(processed_events)"]
-        BUILDER["ProductionClosureDocumentBuilder\n+ CatalogEquipmentClient"]
-        PDF["OpenPdfClosureDocumentGenerator\n(OpenPDF + Roboto + Branding)"]
-        REST["NotifyQuoteController\nNotifyTicketController"]
-        PG_NOTIFY[("PostgreSQL (Flyway V1)\nprocessed_events\ncrew_tickets\nnotification_delivery_audit")]
+    subgraph group2["ms-eventomax-notify"]
+        L_QUOTE["QuoteCommandListener<br/>(MANUAL ACK/NACK)"]
+        L_CREW["CrewTicketCommandListener<br/>(MANUAL ACK/NACK)"]
+        L_EMAIL["EmailCommandListener<br/>(MANUAL ACK/NACK + Retry)"]
+        IDEMP["DatabaseProcessedEventStore<br/>(processed_events)"]
+        BUILDER["ProductionClosureDocumentBuilder<br/>+ CatalogEquipmentClient"]
+        PDF["OpenPdfClosureDocumentGenerator<br/>(OpenPDF + Roboto + Branding)"]
+        REST["NotifyQuoteController<br/>NotifyTicketController"]
+        PG_NOTIFY[("PostgreSQL (Flyway V1)<br/>processed_events<br/>crew_tickets<br/>notification_delivery_audit")]
     end
 
-    EX -->|quote.gen| Q_QUOTE --> L_QUOTE
-    EX -->|crew.ticket| Q_CREW --> L_CREW
-    EX -->|email.send| Q_EMAIL --> L_EMAIL
-    L_QUOTE -.->|basicNack(requeue=false)| DLX --> DLQ_QUOTE
-    L_CREW -.->|basicNack(requeue=false)| DLX --> DLQ_CREW
-    L_EMAIL -.->|basicNack(requeue=false)| DLX --> DLQ_EMAIL
+    EX -->|"quote.gen"| Q_QUOTE --> L_QUOTE
+    EX -->|"crew.ticket"| Q_CREW --> L_CREW
+    EX -->|"email.send"| Q_EMAIL --> L_EMAIL
+    L_QUOTE -.->|"basicNack(requeue=false)"| DLX --> DLQ_QUOTE
+    L_CREW -.->|"basicNack(requeue=false)"| DLX --> DLQ_CREW
+    L_EMAIL -.->|"basicNack(requeue=false)"| DLX --> DLQ_EMAIL
     L_QUOTE --> IDEMP --> PG_NOTIFY
     L_QUOTE --> BUILDER --> PDF
     L_CREW --> PG_NOTIFY

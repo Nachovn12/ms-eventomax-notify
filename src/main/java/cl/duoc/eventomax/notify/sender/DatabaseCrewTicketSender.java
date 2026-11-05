@@ -54,11 +54,15 @@ public class DatabaseCrewTicketSender implements CrewTicketSender {
                 : "crew-evt-" + UUID.randomUUID().toString().substring(0, 8);
 
         LocalDateTime scheduledAt = parseScheduledAt(payload.scheduledAt());
+        String crewInfo = (payload.crewName() != null && !payload.crewName().isBlank())
+                ? " Cuadrilla asignada: " + payload.crewName() + (payload.crewId() != null ? " (" + payload.crewId() + ")." : ".")
+                : (payload.crewId() != null ? " Cuadrilla asignada: " + payload.crewId() + "." : "");
         String instructions = "Hoja de ruta para montaje de equipamiento de la producción '"
                 + (payload.productionName() != null ? payload.productionName() : "Producción #" + payload.productionId())
                 + "' en recinto: " + (payload.location() != null ? payload.location() : "Sin ubicación especificada")
                 + ". Estado operacional: " + (payload.status() != null ? payload.status() : "EN_MONTAJE")
-                + ". Verificar dotación técnica y conexiones de energía/sonido.";
+                + "." + crewInfo
+                + " Verificar dotación técnica y conexiones de energía/sonido.";
 
         CrewTicket ticket = crewTicketRepository.findByEventId(actualEventId)
                 .orElseGet(() -> new CrewTicket(

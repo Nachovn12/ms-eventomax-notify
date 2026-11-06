@@ -73,6 +73,7 @@ eventomax:
     mail:
       from: ${NOTIFY_MAIL_FROM:no-reply@eventomax.cl}
       from-name: ${NOTIFY_MAIL_FROM_NAME:EventoMax Notificaciones}
+      default-recipient: ${NOTIFY_DEFAULT_RECIPIENT:}
     quote:
       provider: ${EVENTOMAX_NOTIFY_QUOTE_PROVIDER:enterprise}
       output-dir: ${NOTIFY_QUOTE_OUTPUT_DIR:./data/quotes}

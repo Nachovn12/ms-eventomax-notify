@@ -74,9 +74,14 @@ eventomax:
       from: ${NOTIFY_MAIL_FROM:no-reply@eventomax.cl}
       from-name: ${NOTIFY_MAIL_FROM_NAME:EventoMax Notificaciones}
       default-recipient: ${NOTIFY_DEFAULT_RECIPIENT:}
+      portal-url: ${NOTIFY_PORTAL_URL:http://localhost:4200/productions}
     quote:
       provider: ${EVENTOMAX_NOTIFY_QUOTE_PROVIDER:enterprise}
       output-dir: ${NOTIFY_QUOTE_OUTPUT_DIR:./data/quotes}
+    catalog:
+      enabled: ${NOTIFY_CATALOG_ENABLED:true}
+      base-url: ${CATALOG_SERVICE_URL:http://localhost:8081}
+      timeout-ms: ${NOTIFY_CATALOG_TIMEOUT_MS:1500}
     storage:
       provider: ${STORAGE_PROVIDER:local}
       local:

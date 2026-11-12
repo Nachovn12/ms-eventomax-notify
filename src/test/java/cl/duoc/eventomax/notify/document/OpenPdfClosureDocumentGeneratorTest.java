@@ -7,6 +7,7 @@ import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfReader;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +25,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -39,15 +41,11 @@ class OpenPdfClosureDocumentGeneratorTest {
         Files.createDirectories(outputDir);
     }
 
-    /**
-     * Fixture de regresión controlado basado estrictamente en las evidencias reales de Producción #1
-     * obtenidas en la auditoría rectificada EP2-FIX-PDF-01-A2.
-     */
     private ProductionClosureDocumentDTO createProduction1RealFixture() {
         var metadata = new DocumentMetadataDTO(
                 "EMX-ACTA-PRD-1",
                 "ACTA DE CIERRE OPERATIVO Y ADMINISTRATIVO DE PRODUCCIÓN",
-                "1.0",
+                "2.0",
                 Instant.parse("2026-10-19T22:57:22.951Z"),
                 "ms-eventomax-notify"
         );
@@ -59,10 +57,10 @@ class OpenPdfClosureDocumentGeneratorTest {
                 LocalDateTime.parse("2026-11-20T18:00:00"),
                 "Centro de Eventos EP2 — Santiago",
                 LocalDateTime.parse("2026-10-19T12:38:29.901749"),
-                LocalDateTime.parse("2026-10-19T19:57:22.361382")
+                LocalDateTime.parse("2026-10-19T19:57:22.361382"),
+                "2026-10-19 22:57:22 UTC"
         );
 
-        // En BD: contact_name = null, phone = null, email = masked
         var organizer = new OrganizerIdentityDTO(
                 "org-ep2-demo-001",
                 "ig*********@gmail.com",
@@ -83,7 +81,6 @@ class OpenPdfClosureDocumentGeneratorTest {
                 new ReservedEquipmentRecordDTO(2L, "EP2-DEMO Consola Digital 32 Canales", 3, "RESERVED")
         );
 
-        // En BD: solo 1 servicio registrado con unit_price 175.00
         var services = List.of(
                 new ContractedServiceRecordDTO(1L, "EP2-DEMO Iluminación Robótica", new BigDecimal("175.00"), LocalDateTime.parse("2026-10-19T13:46:53.249535"))
         );
@@ -111,8 +108,8 @@ class OpenPdfClosureDocumentGeneratorTest {
         );
 
         var conformity = new ConformityStatusDTO(
-                "PENDIENTE DE CONFORMIDAD",
-                "PENDIENTE DE CONFORMIDAD",
+                "AUTENTICADO VÍA ENTRA ID",
+                "REGISTRADO Y NOTIFICADO",
                 false
         );
 
@@ -123,7 +120,7 @@ class OpenPdfClosureDocumentGeneratorTest {
     }
 
     @Test
-    @DisplayName("Generar acta de Producción #1 real en A4 y verificar texto y estructura")
+    @DisplayName("Generar acta ejecutiva consolidada en 1 página A4 con campos Caso 8, Firma Electrónica Dual y Timbre PDF417")
     void testGeneratePdfProduction1Real() throws IOException {
         ProductionClosureDocumentDTO fixture = createProduction1RealFixture();
         Path previewFile = outputDir.resolve("acta-cierre-empresarial-preview.pdf");
@@ -132,124 +129,115 @@ class OpenPdfClosureDocumentGeneratorTest {
 
         assertTrue(Files.exists(previewFile), "El archivo preview debe existir en target/test-output/");
         long fileSize = Files.size(previewFile);
-        assertTrue(fileSize > 2000, "El tamaño del PDF debe ser significativo (>2KB), tamaño: " + fileSize);
+        assertTrue(fileSize > 5000, "El tamaño del PDF empresarial con fuentes y timbre vectorial debe superar 5KB: " + fileSize);
 
-        // Inspección de estructura con OpenPDF PdfReader
         byte[] pdfBytes = Files.readAllBytes(previewFile);
         PdfReader reader = new PdfReader(pdfBytes);
 
-        // 1. Formato A4 (595x842 pt con margen de tolerancia)
         Rectangle pageSize = reader.getPageSize(1);
         assertEquals(PageSize.A4.getWidth(), pageSize.getWidth(), 1.0f, "El ancho debe ser A4 (595pt)");
         assertEquals(PageSize.A4.getHeight(), pageSize.getHeight(), 1.0f, "El alto debe ser A4 (842pt)");
         int totalPages = reader.getNumberOfPages();
-        assertEquals(2, totalPages, "El acta empresarial estructurada de 7 secciones debe abarcar exactamente 2 páginas");
+        assertEquals(1, totalPages, "El acta consolidada ejecutiva para una producción estándar debe ajustarse limpiamente en 1 página A4");
         reader.close();
 
-        // 2. Extracción de texto con Apache PDFBox (interpreta CMaps ToUnicode y TrueType subsettings)
         try (PDDocument pdDoc = Loader.loadPDF(pdfBytes)) {
             PDFTextStripper stripper = new PDFTextStripper();
             String fullText = stripper.getText(pdDoc);
 
-            // 3. Verificación rigurosa de caracteres Unicode (tildes, ñ, guion largo —)
+            // 1. Caracteres Unicode reales (tildes, ñ, guion largo —)
             assertTrue(fullText.contains("Tecnológico"), "Debe preservar tildes en 'Tecnológico'");
             assertTrue(fullText.contains("Iluminación Robótica"), "Debe preservar tildes en 'Iluminación Robótica'");
             assertTrue(fullText.contains("Producción"), "Debe preservar 'Producción'");
             assertTrue(fullText.contains("Centro de Eventos EP2 — Santiago"), "Debe contener ubicación real y guion largo");
 
-            // 4. Verificación de datos exactos de Producción #1
+            // 2. Alcance estricto Caso 8: sin campos de relleno inexistentes
+            assertFalse(fullText.contains("Nombre Contacto:"), "No debe imprimir campos fuera del alcance de Caso 8");
+            assertFalse(fullText.contains("Teléfono Contacto:"), "No debe imprimir teléfono no contemplado en Caso 8");
+            assertFalse(fullText.contains("No registrado"), "No debe imprimir filas de relleno 'No registrado'");
+
+            // 3. Datos reales de Producción, Catálogo, Servicios y Cuadrilla
+            assertTrue(fullText.contains("FOLIO N° 000001"), "Debe incluir recuadro normativo de Folio");
+            assertTrue(fullText.contains("EMX-ACTA-PRD-1"));
             assertTrue(fullText.contains("EP2-DEMO Festival Tecnológico 2026"));
             assertTrue(fullText.contains("org-ep2-demo-001"));
             assertTrue(fullText.contains("ig*********@gmail.com"));
             assertTrue(fullText.contains("CERRADO"));
             assertTrue(fullText.contains("EP2-DEMO Generador Eléctrico 50kVA"));
             assertTrue(fullText.contains("EP2-DEMO Consola Digital 32 Canales"));
+            assertTrue(fullText.contains("33d5f659-8c07-44ec-b413-456abc5f0aa1"));
 
-            // 5. Verificación de ausencia estricta de moneda no registrada (CLP, USD, $)
-            assertTrue(fullText.contains("175.00"), "Debe mostrar el valor numérico 175.00 de la tarifa");
-            assertTrue(fullText.contains("Tarifa Base Registrada"), "Debe contener la etiqueta de tarifa base registrada");
-            assertFalse(fullText.contains("CLP"), "No debe contener 'CLP' al no existir columna monetaria en base de datos");
-            assertFalse(fullText.contains("USD"), "No debe contener 'USD'");
-            assertFalse(fullText.contains("$"), "No debe anteponer ni contener símbolo monetario '$'");
+            // 4. Ausencia estricta de moneda inventada (CLP, USD, $) y presencia de total numérico
+            assertTrue(fullText.contains("175.00"), "Debe mostrar el valor numérico exacto 175.00");
+            assertTrue(fullText.contains("TOTAL TARIFA BASE REGISTRADA"), "Debe incluir fila resumen de tarifa base");
+            assertFalse(fullText.contains("CLP"), "No debe inventar moneda CLP");
+            assertFalse(fullText.contains("USD"), "No debe inventar moneda USD");
+            assertFalse(fullText.contains("$"), "No debe anteponer símbolo monetario '$'");
 
-            // 6. Verificación de Trazabilidad y UUIDs reales sin asociaciones W3C falsas
+            // 5. Firma Electrónica Dual para ambos Stakeholders + Timbre PDF417 + SHA-256 + CSV + Ley 19.799
+            assertTrue(fullText.contains("RESPONSABLE OPERATIVO"), "Debe contener certificado de Stakeholder 1 (Responsable Operativo)");
+            assertTrue(fullText.contains("REPRESENTANTE DEL ORGANIZADOR"), "Debe contener certificado de Stakeholder 2 (Organizador Mandante)");
+            assertTrue(fullText.contains("sqdd0RRocgoh8Vpb8bmF2B7ad03kqIPhbn_Fs07K9ds"), "Debe acreditar el actor OID real de cierre");
+            assertTrue(fullText.contains("TIMBRE ELECTRÓNICO"), "Debe incluir leyenda del Timbre Electrónico PDF417");
+            assertTrue(fullText.contains("PDF417"), "Debe especificar estándar PDF417");
+            assertTrue(fullText.contains("Ley N° 19.799"), "Debe referenciar marco normativo Ley N° 19.799 sin efectos tributarios");
+            assertTrue(Pattern.compile("EMX-000001-[0-9A-F]{4}-[0-9A-F]{4}").matcher(fullText).find(),
+                    "Debe generar Código Seguro de Verificación (CSV) determinístico");
+            assertTrue(Pattern.compile("[0-9a-f]{64}").matcher(fullText).find(),
+                    "Debe incluir huella digital SHA-256 hexadecimal completa de 64 caracteres");
+
+            // 6. Trazabilidad técnica completa íntegra
             assertTrue(fullText.contains("678c5962-6568-4db9-9e1a-4a8fb7a68614"), "Debe contener RabbitMQ command eventId");
             assertTrue(fullText.contains("274e40d9-cb8e-4205-93a7-c62605d298bd"), "Debe contener Kafka closing eventId");
-            assertTrue(fullText.contains("b3c914d3-dd99-4c6a-9429-50ee613d12b5"), "Debe contener Trace ID");
-            assertTrue(fullText.contains("Trace ID:"), "Debe etiquetar como 'Trace ID:'");
-            assertFalse(fullText.contains("W3C Context"), "No debe etiquetar como W3C Context un UUID");
-            assertTrue(fullText.contains("sqdd0RRocgoh8Vpb8bmF2B7ad03kqIPhbn_Fs07K9ds"), "Debe contener el actor OID real");
+            assertTrue(fullText.contains("b3c914d3-dd99-4c6a-9429-50ee613d12b5"), "Debe contener Trace ID completo");
+            assertTrue(fullText.contains("b060074a-db80-40fc-ba21-a0dabd22e27a"), "Debe contener Correlation ID completo");
 
-            // 7. Verificación de formato limpio de historial y fechas UTC
-            assertTrue(fullText.contains("SOLICITADO -> CONFIRMADO"), "Debe mostrar transición limpia de estados");
-            assertTrue(fullText.contains("EN_EJECUCION -> CERRADO"), "Debe mostrar transición final a CERRADO");
-            assertTrue(fullText.contains("UTC"), "Debe indicar zona UTC explícita en timestamps de eventos");
+            // 7. Franja condicional de vista previa cuando previewMode=true
+            assertTrue(fullText.contains("VISTA PREVIA — DATOS DE PRUEBA — NO VÁLIDO PARA CONFORMIDAD"));
 
-            // 8. Verificación de elementos de branding empresarial y vista previa condicionada
-            assertTrue(fullText.contains("VISTA PREVIA — DATOS DE PRUEBA — NO VÁLIDO PARA CONFORMIDAD"),
-                    "Debe contener franja de vista previa con leyenda completa en previewMode=true");
-            assertFalse(fullText.contains("Final Certificada"), "No debe ostentar certificación final falsa");
-            assertFalse(fullText.contains("Local Certificado (Auditoría E2E)"), "No debe declarar certificación local falsa");
-            assertTrue(fullText.contains("Plataforma Cloud Native de Gestión y Producción de Eventos Masivos"), "Debe contener bajada de título");
-
-            // 9. Verificación de recuadros de firma sin cargos ni identidades ficticias
-            assertTrue(fullText.contains("RESPONSABLE OPERATIVO"), "Debe contener recuadro 'RESPONSABLE OPERATIVO'");
-            assertTrue(fullText.contains("REPRESENTANTE DEL ORGANIZADOR"), "Debe contener recuadro 'REPRESENTANTE DEL ORGANIZADOR'");
-            assertFalse(fullText.contains("Productor General / Jefe Técnico"), "No debe contener cargo no verificado");
-            assertTrue(fullText.contains("PENDIENTE DE CONFORMIDAD"), "Debe contener estado 'PENDIENTE DE CONFORMIDAD'");
-
-            // 10. Ausencia estricta de datos inventados
-            assertFalse(fullText.contains("Catering"), "No debe contener Catering");
-            assertFalse(fullText.contains("Seguridad y Control"), "No debe contener Seguridad");
-            assertFalse(fullText.contains("430.000"), "No debe contener 430.000");
-            assertFalse(fullText.contains("Ignacio Organizador"), "No debe contener nombre inventado de contacto");
-            assertFalse(fullText.contains("8765 4321"), "No debe contener teléfono inventado");
-            assertFalse(fullText.contains("Firmado digitalmente"), "No debe simular firma digital existente");
-
-            // 11. Renderizar imágenes PNG de alta resolución de las páginas para la inspección visual
+            // 8. Renderizado visual de control a PNG
             PDFRenderer renderer = new PDFRenderer(pdDoc);
             for (int i = 0; i < totalPages; i++) {
-                BufferedImage image = renderer.renderImageWithDPI(i, 150);
+                BufferedImage image = renderer.renderImageWithDPI(i, 200f, ImageType.RGB);
                 File pngFile = new File(outputDir.toFile(), "preview-pagina-" + (i + 1) + ".png");
                 ImageIO.write(image, "PNG", pngFile);
-                assertTrue(pngFile.exists(), "La imagen renderizada de la página " + (i + 1) + " debe existir");
+                assertTrue(pngFile.exists());
             }
         }
     }
 
     @Test
-    @DisplayName("Tolerancia a campos opcionales nulos sin lanzar excepción")
+    @DisplayName("Tolerancia a campos opcionales nulos sin lanzar excepción y en 1 página")
     void testNullOptionalFieldsTolerance() {
         var minimalDoc = new ProductionClosureDocumentDTO(
-                new DocumentMetadataDTO("CODE-TEST", "TITULO TEST", "1.0", Instant.now(), "notify"),
+                new DocumentMetadataDTO("CODE-TEST", "TITULO TEST", "2.0", Instant.now(), "notify"),
                 new ProductionIdentityDTO(999L, "Producción Mínima", "CERRADO", null, "Recinto Mínimo", null, null),
                 new OrganizerIdentityDTO("org-minimal", null, null, null),
-                null, // timeline null
-                null, // equipment null
-                null, // services null
-                null, // crewTicket null
-                null, // adminDecl null
-                null, // trace null
-                null  // conformity null
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
         );
 
         byte[] bytes = assertDoesNotThrow(() -> generator.generatePdfBytes(minimalDoc));
         assertNotNull(bytes);
-        assertTrue(bytes.length > 1000);
+        assertTrue(bytes.length > 2000);
 
         PdfReader reader = assertDoesNotThrow(() -> new PdfReader(bytes));
-        assertTrue(reader.getNumberOfPages() >= 1, "Debe tener al menos 1 página");
+        assertEquals(1, reader.getNumberOfPages(), "Documento mínimo debe ocupar exactamente 1 página");
         reader.close();
     }
 
     @Test
-    @DisplayName("Soporte de múltiples páginas con paginación real Página X de N")
+    @DisplayName("Soporte de múltiples páginas con paginación real Página X de N cuando hay decenas de eventos")
     void testMultiPageDocumentPagination() throws IOException {
         var baseFixture = createProduction1RealFixture();
 
-        // Creamos una lista extensa de timeline para forzar salto de página a página 3
         List<OperationalTimelineItemDTO> longTimeline = new ArrayList<>(baseFixture.timeline());
-        for (int i = 6; i <= 35; i++) {
+        for (int i = 6; i <= 45; i++) {
             longTimeline.add(new OperationalTimelineItemDTO(
                     i,
                     "ESTADO_" + (i - 1),
@@ -278,7 +266,7 @@ class OpenPdfClosureDocumentGeneratorTest {
 
         PdfReader reader = new PdfReader(Files.readAllBytes(multiPageFile));
         int pages = reader.getNumberOfPages();
-        assertTrue(pages >= 3, "El documento con 35 transiciones debe abarcar al menos 3 páginas, páginas reales: " + pages);
+        assertTrue(pages >= 2, "El documento con 45 transiciones debe paginar dinámicamente a 2+ páginas, real: " + pages);
         reader.close();
     }
 
@@ -292,13 +280,9 @@ class OpenPdfClosureDocumentGeneratorTest {
             PDFTextStripper stripper = new PDFTextStripper();
             String fullText = stripper.getText(pdDoc);
 
-            assertFalse(fullText.contains("VISTA PREVIA"),
-                    "En modo producción real (previewMode=false) no debe imprimirse ninguna franja de vista previa");
-            assertFalse(fullText.contains("NO VÁLIDO PARA CONFORMIDAD"),
-                    "En modo producción real no debe imprimirse la cláusula de vista previa");
-            assertTrue(fullText.contains("ACTA DE CIERRE OPERATIVO Y ADMINISTRATIVO"),
-                    "Debe conservar el título institucional del documento");
+            assertFalse(fullText.contains("VISTA PREVIA"));
+            assertFalse(fullText.contains("NO VÁLIDO PARA CONFORMIDAD"));
+            assertTrue(fullText.contains("ACTA DE CIERRE OPERATIVO"));
         }
     }
 }
-

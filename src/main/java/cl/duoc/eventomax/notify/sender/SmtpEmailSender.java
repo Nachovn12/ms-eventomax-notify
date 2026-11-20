@@ -45,9 +45,6 @@ public class SmtpEmailSender implements EmailSender {
     private final String fromEmail;
     private final String fromName;
 
-    @Value("${eventomax.notify.mail.default-recipient:}")
-    private String defaultRecipientEmail;
-
     @Value("${eventomax.notify.mail.portal-url:http://localhost:4200/productions}")
     private String portalUrl = "http://localhost:4200/productions";
 
@@ -81,9 +78,6 @@ public class SmtpEmailSender implements EmailSender {
 
         // Regla 7 & 8: No convertir automáticamente organizerId a correo ni inventar destinatarios.
         String recipient = payload.recipientEmail();
-        if ((recipient == null || recipient.isBlank()) && defaultRecipientEmail != null && !defaultRecipientEmail.isBlank()) {
-            recipient = defaultRecipientEmail.trim();
-        }
         if (recipient == null || recipient.isBlank()) {
             log.warn("[EMAIL_DELIVERY_BLOCKED] Producción #{}: No existe contacto autorizado registrado para organizerId='{}'. Registro observable generado.",
                     payload.productionId(), payload.organizerId());

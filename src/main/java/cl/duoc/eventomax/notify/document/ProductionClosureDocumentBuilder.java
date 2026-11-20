@@ -239,7 +239,9 @@ public class ProductionClosureDocumentBuilder {
                         return new EquipmentResolutionResult(List.copyOf(list), ProductionClosureDocumentDTO.CatalogAvailabilityState.AVAILABLE);
                     } else if (catResult.state() == CatalogReservationClient.CatalogAvailabilityState.EMPTY) {
                         return new EquipmentResolutionResult(List.of(), ProductionClosureDocumentDTO.CatalogAvailabilityState.EMPTY);
-                    } else if (catResult.state() == CatalogReservationClient.CatalogAvailabilityState.UNAVAILABLE) {
+                    } else if (catResult.state() == CatalogReservationClient.CatalogAvailabilityState.UNAUTHORIZED) {
+                        return new EquipmentResolutionResult(null, ProductionClosureDocumentDTO.CatalogAvailabilityState.UNAUTHORIZED);
+                    } else if (catResult.state() == CatalogReservationClient.CatalogAvailabilityState.UNAVAILABLE) {
                         // NO GENERAR REGISTRO SINTÉTICO: null en items y estado UNAVAILABLE
                         return new EquipmentResolutionResult(null, ProductionClosureDocumentDTO.CatalogAvailabilityState.UNAVAILABLE);
                     } else if (catResult.state() == CatalogReservationClient.CatalogAvailabilityState.NOT_PROVIDED) {

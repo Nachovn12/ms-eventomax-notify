@@ -23,9 +23,6 @@ public class LoggingEmailSender implements EmailSender {
 
     private final NotificationDeliveryAuditRepository auditRepository;
 
-    @org.springframework.beans.factory.annotation.Value("${eventomax.notify.mail.default-recipient:}")
-    private String defaultRecipientEmail;
-
     public LoggingEmailSender() {
         this(null);
     }
@@ -38,9 +35,6 @@ public class LoggingEmailSender implements EmailSender {
     @Override
     public void send(EmailProductionStatusPayload payload) {
         String effectiveRecipient = payload.recipientEmail();
-        if ((effectiveRecipient == null || effectiveRecipient.isBlank()) && defaultRecipientEmail != null && !defaultRecipientEmail.isBlank()) {
-            effectiveRecipient = defaultRecipientEmail.trim();
-        }
         log.info("[EMAIL SIMULADO - MODO ACADEMICO] Operación registrada en simulación local (sin envío SMTP real): "
                         + "productionId={}, status={}, organizerId={}, recipientEmail={}",
                 payload.productionId(),

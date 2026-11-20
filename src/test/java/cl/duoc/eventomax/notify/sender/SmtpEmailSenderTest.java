@@ -10,9 +10,16 @@ import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
+import cl.duoc.eventomax.notify.model.NotificationDeliveryAudit;
 import org.mockito.Mockito;
 import org.slf4j.MDC;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.charset.StandardCharsets;
@@ -20,6 +27,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SmtpEmailSenderTest {
@@ -37,7 +46,7 @@ class SmtpEmailSenderTest {
         smtpEmailSender = new SmtpEmailSender(
                 mailSender,
                 auditRepository,
-                "ignaciovn11@gmail.com",
+                "notify@example.invalid",
                 "EventoMax Notificaciones"
         );
         ReflectionTestUtils.setField(smtpEmailSender, "portalUrl", "http://localhost:4200/productions");
@@ -58,7 +67,7 @@ class SmtpEmailSenderTest {
         EmailProductionStatusPayload payload = new EmailProductionStatusPayload(
                 12L,
                 "org-duoc-demo-38057",
-                "ig.valeria@duocuc.cl",
+                "organizer@example.invalid",
                 "Cumbre Cloud Native",
                 "EN_MONTAJE",
                 "2027-11-25T20:00",
@@ -103,7 +112,7 @@ class SmtpEmailSenderTest {
         EmailProductionStatusPayload payload = new EmailProductionStatusPayload(
                 145L,
                 "org-duoc-01",
-                "ig.valeria@duocuc.cl",
+                "organizer@example.invalid",
                 "Festival Innovación Duoc",
                 "CERRADO",
                 "2027-12-10T18:30:00",
@@ -135,7 +144,7 @@ class SmtpEmailSenderTest {
         EmailProductionStatusPayload payload = new EmailProductionStatusPayload(
                 7L,
                 "org & <partners>",
-                "ig.valeria@duocuc.cl",
+                "organizer@example.invalid",
                 " Gala <VIP> & Co ",
                 "CANCELADO",
                 null,
@@ -161,6 +170,38 @@ class SmtpEmailSenderTest {
         ExtractedParts out = new ExtractedParts();
         collectParts(content, out);
         return out;
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {" ", "\t"})
+    void missingAuthorizedRecipientIsBlockedBeforeSmtp(String recipient) {
+        var payload = new EmailProductionStatusPayload(8L, "org-fixture", recipient,
+                "Evento de prueba", "CONFIRMADO", "2027-01-01T12:00", "Recinto");
+        assertThatThrownBy(() -> smtpEmailSender.send(payload)).isInstanceOf(MissingRecipientContactException.class);
+        assertThat(mailSender.sentMessages).isEmpty();
+        var audit = ArgumentCaptor.forClass(NotificationDeliveryAudit.class);
+        verify(auditRepository).save(audit.capture());
+        assertThat(audit.getValue().getStatus()).isEqualTo("BLOCKED_NO_CONTACT");
+        assertThat(audit.getValue().getRecipient()).isNull();
+    }
+
+    @Test
+    void legacyDefaultRecipientPropertyCannotRestoreUnsafeFallback() {
+        new ApplicationContextRunner()
+                .withUserConfiguration(SmtpEmailSender.class)
+                .withBean(JavaMailSender.class, () -> mailSender)
+                .withBean(NotificationDeliveryAuditRepository.class, () -> auditRepository)
+                .withPropertyValues("eventomax.notify.mail.default-recipient=wrong@example.invalid",
+                        "NOTIFY_DEFAULT_RECIPIENT=wrong@example.invalid")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    var payload = new EmailProductionStatusPayload(8L, "org-fixture", null,
+                            "Evento de prueba", "CONFIRMADO", "2027-01-01T12:00", "Recinto");
+                    assertThatThrownBy(() -> context.getBean(SmtpEmailSender.class).send(payload))
+                            .isInstanceOf(MissingRecipientContactException.class);
+                    assertThat(mailSender.sentMessages).isEmpty();
+                });
     }
 
     private void collectParts(Object content, ExtractedParts out) throws Exception {

@@ -477,9 +477,10 @@ public class OpenPdfClosureDocumentGenerator {
             }
         } else {
             String msg = switch (catState) {
-                case EMPTY -> "Sin reservas adicionales de equipamiento registradas en Catálogo para esta producción.";
-                case UNAVAILABLE -> "Consulta de inventario en Catálogo temporalmente no disponible al cierre.";
-                default -> "Sin dotación de inventario externo asociada en el comando de cierre.";
+                case EMPTY -> "Sin reservas de equipamiento informadas para esta producción.";
+                case UNAVAILABLE -> "No fue posible verificar el inventario en Catálogo al emitir el acta. Esto no confirma ausencia de reservas.";
+                case UNAUTHORIZED -> "Catálogo no autorizó la consulta de inventario al emitir el acta. Esto no confirma ausencia de reservas.";
+                default -> "Equipamiento no incluido en el comando y consulta de Catálogo no realizada. No se puede confirmar el inventario.";
             };
             addEmptySpanRow(eqTable, msg, 4);
         }

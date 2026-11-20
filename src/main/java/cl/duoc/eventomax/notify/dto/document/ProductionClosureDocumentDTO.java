@@ -57,7 +57,10 @@ public record ProductionClosureDocumentDTO(
         /** Consulta exitosa confirmando 0 reservas */
         EMPTY,
         /** Falla de red, timeout o error 5xx de catálogo */
-        UNAVAILABLE,
+        UNAVAILABLE,
+
+        /** Consulta rechazada por Catálogo (HTTP 401/403). */
+        UNAUTHORIZED,
         /** Información no provista en el comando o no solicitada */
         NOT_PROVIDED
     }

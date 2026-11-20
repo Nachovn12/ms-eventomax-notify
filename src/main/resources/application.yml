@@ -81,7 +81,10 @@ eventomax:
     mail:
       from: ${NOTIFY_MAIL_FROM:no-reply@eventomax.cl}
       from-name: ${NOTIFY_MAIL_FROM_NAME:EventoMax Notificaciones}
-      portal-url: ${NOTIFY_PORTAL_URL:http://localhost:4200/productions}
+      portal-url: ${NOTIFY_PORTAL_URL:}
+      portal-allowed-hosts: ${NOTIFY_PORTAL_ALLOWED_HOSTS:}
+      # Enable only after documented authentication/ownership E2E approval.
+      portal-e2e-approved: ${NOTIFY_PORTAL_E2E_APPROVED:false}
     quote:
       provider: ${EVENTOMAX_NOTIFY_QUOTE_PROVIDER:enterprise}
       output-dir: ${NOTIFY_QUOTE_OUTPUT_DIR:./data/quotes}

@@ -58,7 +58,7 @@ class SmtpEmailSenderTest {
     }
 
     @Test
-    void rendersBoardingPassTemplateWithDeepLinkToCrewTicketForEnMontaje() throws Exception {
+    void rendersExecutiveMontageWithoutUnverifiedTicketOrCta() throws Exception {
         MDC.put("traceId", "ee530d97-91dc-4bb1-ab5f-3acfb37a9e9a");
         MDC.put("correlationId", "68b64121-af85-4d91-8687-6ca49dbf2c26");
 
@@ -79,27 +79,21 @@ class SmtpEmailSenderTest {
         mime.saveChanges();
 
         assertThat(mime.getSubject())
-                .isEqualTo("EventoMax · Montaje en curso (#12) — Cumbre Cloud Native");
+                .isEqualTo("EventoMax · Montaje iniciado · Producción #12");
 
         ExtractedParts parts = extractParts(mime.getContent());
-        assertThat(parts.html)
-                .contains("cid:eventomax-logo")
-                .contains("ORDEN #0012")
-                .contains("En Montaje")
-                .doesNotContain(">EN_MONTAJE<")
-                .contains("border-top:2px dashed #CBD5E1")
-                .contains("25 Nov 2027 · 20:00")
-                .doesNotContain("2027-11-25T20:00")
-                .contains("Ticket Operativo de Cuadrilla")
-                .contains("Ver Ticket de Cuadrilla en EventoMax →")
-                .contains("href=\"http://localhost:4200/productions?productionId=12&amp;action=view-ticket\"")
-                .contains("Trace: ee530d97-91dc-4bb1-ab5f-3acfb37a9e9a · Event: 68b64121-af85-4d91-8687-6ca49dbf2c26");
+        assertThat(parts.html).contains("cid:eventomax-logo", "Producción #12", "El montaje está en curso", "zona no informada")
+                .doesNotContain("Ticket Operativo", "view-ticket", "href=", "Trace:", "org-duoc-demo-38057");
+        assertThat(parts.plain).contains("El montaje está en curso", "acceso habitual")
+                .doesNotContain("http", "ee530d97", "org-duoc");
+        assertThat(mime.isMimeType("multipart/related")).isTrue();
+        assertThat(mime.getHeader("X-EventoMax-Trace-Id", null)).isEqualTo("ee530d97-91dc-4bb1-ab5f-3acfb37a9e9a");
 
         assertThat(parts.inlineContentIds).contains("<eventomax-logo>");
     }
 
     @Test
-    void rendersDirectDownloadDeepLinkAndAttachesClosurePdfWhenStatusIsCerrado() throws Exception {
+    void rendersVerifiedClosureWithoutUnapprovedPortalLink() throws Exception {
         MDC.put("traceId", "trace-close-01");
         MDC.put("correlationId", "evt-close-01");
 
@@ -126,19 +120,20 @@ class SmtpEmailSenderTest {
                 "trace-close-01", "corr-close-01", payload), UUID.randomUUID(), documentId, samplePdf, ClosurePdf.sha256(samplePdf));
 
         MimeMessage mime = mailSender.sentMessages.getFirst();
+        // JavaMailSenderImpl preserves this ID around saveChanges(); this capturing stub does not send.
+        assertThat(mime.getHeader("Message-ID", null)).startsWith("<closure-").endsWith("@example.invalid>");
         mime.saveChanges();
 
         assertThat(mime.getSubject())
-                .isEqualTo("EventoMax · Producción cerrada · Acta PDF disponible (#145) — Festival Innovación Duoc");
+                .isEqualTo("EventoMax · Producción #145 cerrada");
 
         ExtractedParts parts = extractParts(mime.getContent());
-        assertThat(parts.html)
-                .contains("ORDEN #0145")
-                .contains("Cerrado")
-                .contains("10 Dic 2027 · 18:30")
-                .contains("Acta de Cierre Empresarial en formato PDF")
-                .contains("Descargar Acta PDF en EventoMax →")
-                .contains("href=\"http://localhost:4200/productions?productionId=145&amp;action=download-pdf\"");
+        assertThat(parts.html).contains("Producción #145", "Tu producción ha sido cerrada", "PDF adjunto")
+                .doesNotContain("href=", "firmable", "org-duoc-01", "trace-close-01");
+        assertThat(parts.plain).contains("PDF adjunto").doesNotContain("http");
+        assertThat(mime.isMimeType("multipart/mixed")).isTrue();
+        assertThat(parts.pdf).isEqualTo(samplePdf);
+        assertThat(mime.getHeader("X-EventoMax-Document-SHA256", null)).isEqualTo(ClosurePdf.sha256(samplePdf));
 
         assertThat(parts.attachmentFileNames).contains("Acta-Cierre-Produccion-145.pdf");
     }
@@ -161,13 +156,8 @@ class SmtpEmailSenderTest {
         mime.saveChanges();
         ExtractedParts parts = extractParts(mime.getContent());
 
-        assertThat(parts.html)
-                .contains("Cancelado")
-                .contains("Gala &lt;VIP&gt; &amp; Co")
-                .contains("Salón &quot;A&quot; &lt;Norte&gt;")
-                .contains("Por definir")
-                .contains("href=\"http://localhost:4200/productions?productionId=7\"")
-                .doesNotContain("<VIP>");
+        assertThat(parts.html).contains("Actualizado", "Gala &lt;VIP&gt; &amp; Co", "Salón &quot;A&quot; &lt;Norte&gt;", "Fecha no disponible")
+                .doesNotContain("<VIP>", "href=", "org &", "cargos", "despachos");
     }
 
     private ExtractedParts extractParts(Object content) throws Exception {
@@ -229,6 +219,7 @@ class SmtpEmailSenderTest {
                 }
                 if (Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition()) && part.getFileName() != null) {
                     out.attachmentFileNames.add(part.getFileName());
+                    if (part.isMimeType("application/pdf")) out.pdf = part.getInputStream().readAllBytes();
                 }
                 String contentType = part.getContentType().toLowerCase();
                 Object partContent = part.getContent();
@@ -246,6 +237,7 @@ class SmtpEmailSenderTest {
     private static class ExtractedParts {
         String html = "";
         String plain = "";
+        byte[] pdf;
         final List<String> inlineContentIds = new ArrayList<>();
         final List<String> attachmentFileNames = new ArrayList<>();
     }

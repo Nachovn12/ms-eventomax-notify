@@ -1,3 +1,5 @@
 mvnw text eol=lf
 *.sh text eol=lf
 *.cmd text eol=crlf
+# Preserve exported MIME bytes and legal whitespace in folded Content-Type headers.
+docs/notify-2c/previews/*.eml -text whitespace=-blank-at-eol

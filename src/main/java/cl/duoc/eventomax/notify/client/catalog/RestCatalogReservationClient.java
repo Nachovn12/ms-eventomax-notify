@@ -3,6 +3,7 @@ package cl.duoc.eventomax.notify.client.catalog;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -13,6 +14,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,10 +37,10 @@ public class RestCatalogReservationClient implements CatalogReservationClient {
 
     @Autowired
     public RestCatalogReservationClient(
-            @Value("${eventomax.notify.catalog.base-url:${CATALOG_SERVICE_URL:http://localhost:8081}}") String baseUrl,
+            @Value("${eventomax.notify.catalog.base-url:${CATALOG_BASE_URL:${CATALOG_SERVICE_URL:http://localhost:8081}}}") String baseUrl,
             @Value("${eventomax.notify.catalog.enabled:true}") boolean enabled,
             @Value("${eventomax.notify.catalog.timeout-ms:1500}") int timeoutMs) {
-        this.baseUrl = baseUrl != null ? baseUrl.replaceAll("/+$", "") : "http://localhost:8081";
+        this.baseUrl = baseUrl != null ? baseUrl.trim().replaceAll("/+$", "") : "http://localhost:8081";
         this.enabled = enabled;
         this.timeoutMs = Math.max(200, timeoutMs);
         this.httpClient = HttpClient.newBuilder()
@@ -53,40 +56,63 @@ public class RestCatalogReservationClient implements CatalogReservationClient {
         }
         String url = baseUrl + "/api/catalog/reservations/production/" + productionId;
         try {
-            HttpRequest req = HttpRequest.newBuilder()
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(Duration.ofMillis(timeoutMs))
                     .header("Accept", "application/json")
-                    .GET()
-                    .build();
+                    .GET();
+            for (String key : List.of("traceId", "correlationId")) {
+                String value = MDC.get(key);
+                if (value != null && !value.isBlank()) {
+                    builder.header("traceId".equals(key) ? "X-Trace-Id" : "X-Correlation-Id", value);
+                }
+            }
+            HttpRequest req = builder.build();
 
             HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-            if (resp.statusCode() >= 200 && resp.statusCode() < 300) {
+            if (resp.statusCode() == 200) {
                 List<RemoteReservationDto> raw = objectMapper.readValue(
                         resp.body(), new TypeReference<List<RemoteReservationDto>>() {});
-                if (raw == null || raw.isEmpty()) {
+                if (raw == null) {
+                    return CatalogReservationResult.unavailable("INVALID_RESPONSE");
+                }
+                if (raw.isEmpty()) {
                     return CatalogReservationResult.empty();
                 }
                 List<CatalogReservationItem> mapped = new ArrayList<>();
                 for (RemoteReservationDto r : raw) {
-                    if (r == null) continue;
+                    if (r == null || r.equipmentId() == null || r.equipmentId() <= 0
+                            || r.quantity() == null || r.quantity() <= 0) {
+                        return CatalogReservationResult.unavailable("INVALID_RESERVATION");
+                    }
                     mapped.add(new CatalogReservationItem(
                             r.equipmentId(),
-                            r.equipmentName() != null ? r.equipmentName() : "Equipamiento ID #" + r.equipmentId(),
+                            r.equipmentName(),
                             r.quantity(),
-                            r.status() != null ? r.status() : "RESERVED"
+                            r.status()
                     ));
                 }
                 return mapped.isEmpty() ? CatalogReservationResult.empty() : CatalogReservationResult.available(mapped);
             }
-            if (resp.statusCode() == 404) {
-                return CatalogReservationResult.empty();
+            if (resp.statusCode() == 401 || resp.statusCode() == 403) {
+                log.warn("Consulta de reservas no autorizada: HTTP {}, producción {}", resp.statusCode(), productionId);
+                return CatalogReservationResult.unauthorized(resp.statusCode());
             }
             log.warn("Consulta de reservas a Catálogo devolvió HTTP {} para producción {}", resp.statusCode(), productionId);
             return CatalogReservationResult.unavailable("HTTP " + resp.statusCode());
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            return CatalogReservationResult.unavailable("INTERRUPTED");
+        } catch (HttpTimeoutException ex) {
+            log.warn("Timeout de Catálogo para producción {}", productionId);
+            return CatalogReservationResult.unavailable("TIMEOUT");
+        } catch (IOException ex) {
+            log.warn("Error de conexión a Catálogo para producción {}", productionId);
+            return CatalogReservationResult.unavailable("CONNECTION_ERROR");
         } catch (Exception ex) {
-            log.warn("Catálogo no accesible al consultar reservas de producción {}: {}", productionId, ex.getMessage());
-            return CatalogReservationResult.unavailable(ex.getMessage());
+            // No incluir cuerpos, URLs ni mensajes remotos potencialmente sensibles.
+            log.warn("Respuesta o configuración de Catálogo inválida para producción {}", productionId);
+            return CatalogReservationResult.unavailable("INVALID_RESPONSE");
         }
     }
 

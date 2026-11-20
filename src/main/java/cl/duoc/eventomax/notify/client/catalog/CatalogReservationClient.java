@@ -28,6 +28,9 @@ public interface CatalogReservationClient {
          */
         UNAVAILABLE,
 
+        /** Catálogo rechazó la consulta con HTTP 401 o 403. */
+        UNAUTHORIZED,
+
         /**
          * No se realizó consulta (payload antiguo o configuración documental desacoplada).
          */
@@ -76,6 +79,11 @@ public interface CatalogReservationClient {
                     List.of(),
                     "Información de reservas de catálogo no provista"
             );
+        }
+
+        public static CatalogReservationResult unauthorized(int status) {
+            return new CatalogReservationResult(CatalogAvailabilityState.UNAUTHORIZED,
+                    List.of(), "HTTP_" + status + "_UNAUTHORIZED");
         }
     }
 }

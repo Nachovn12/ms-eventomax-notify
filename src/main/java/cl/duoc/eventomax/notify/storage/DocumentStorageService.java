@@ -6,6 +6,16 @@ package cl.duoc.eventomax.notify.storage;
  */
 public interface DocumentStorageService {
 
+    /** Atomic create, never replacement. Durable closure storage must implement this capability. */
+    default boolean storeDocumentIfAbsent(String category, String filename, byte[] content, String contentType) {
+        throw new UnsupportedOperationException("IMMUTABLE_STORAGE_UNSUPPORTED");
+    }
+
+    /** Exact key only; implementations with legacy fallbacks must override. */
+    default byte[] retrieveDocumentExact(String category, String filename) {
+        return retrieveDocument(category, filename);
+    }
+
     /**
      * Almacena un documento binario en el backend configurado.
      *

@@ -3,13 +3,17 @@ package cl.duoc.eventomax.notify.sender;
 import cl.duoc.eventomax.notify.messaging.email.EmailProductionStatusPayload;
 import cl.duoc.eventomax.notify.model.NotificationDeliveryAudit;
 import cl.duoc.eventomax.notify.repository.NotificationDeliveryAuditRepository;
-import cl.duoc.eventomax.notify.storage.DocumentStorageService;
+import cl.duoc.eventomax.notify.closure.ClosureEmailTransport;
+import cl.duoc.eventomax.notify.closure.ClosurePdf;
+import cl.duoc.eventomax.notify.closure.ClosurePreflightException;
+import cl.duoc.eventomax.notify.closure.RecipientCheck;
+import cl.duoc.eventomax.notify.messaging.common.MessageEnvelope;
+import java.util.UUID;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.ByteArrayResource;
@@ -20,8 +24,6 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
 
 import java.io.UnsupportedEncodingException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -30,7 +32,7 @@ import java.util.Locale;
 
 @Component
 @ConditionalOnProperty(name = "eventomax.notify.email.provider", havingValue = "smtp", matchIfMissing = true)
-public class SmtpEmailSender implements EmailSender {
+public class SmtpEmailSender implements EmailSender, ClosureEmailTransport {
 
     private static final Logger log = LoggerFactory.getLogger(SmtpEmailSender.class);
     private static final String LOGO_CONTENT_ID = "eventomax-logo";
@@ -47,15 +49,8 @@ public class SmtpEmailSender implements EmailSender {
 
     @Value("${eventomax.notify.mail.portal-url:http://localhost:4200/productions}")
     private String portalUrl = "http://localhost:4200/productions";
-
-    @Autowired(required = false)
-    private DocumentStorageService documentStorageService;
-
-    @Value("${eventomax.notify.quote.output-dir:./data/quotes}")
-    private String quoteOutputDir = "./data/quotes";
-
-    @Value("${eventomax.notify.mail.closure-pdf-wait-max-ms:2500}")
-    private long closurePdfWaitMaxMs = 2500L;
+    @Value("${eventomax.notify.closure.max-pdf-bytes:10000000}")
+    private int closureMaxPdfBytes = 10_000_000;
 
     public SmtpEmailSender(
             JavaMailSender mailSender,
@@ -99,25 +94,13 @@ public class SmtpEmailSender implements EmailSender {
                     "Fallo de entrega: No existe contacto registrado para el organizador " + payload.organizerId());
         }
 
+        if ("CERRADO".equals(normalizeStatus(payload.status()))) {
+            throw new IllegalStateException("DURABLE_CLOSURE_REQUIRED");
+        }
         try {
             String normalizedStatus = normalizeStatus(payload.status());
             StatusPresentation meta = resolveStatusPresentation(payload.status());
             String actionUrl = buildActionUrl(payload.productionId(), normalizedStatus);
-            byte[] closurePdfBytes = "CERRADO".equals(normalizedStatus)
-                    ? resolveClosurePdfWithRetry(payload.productionId())
-                    : null;
-            if (closurePdfBytes != null) {
-                meta = new StatusPresentation(
-                        meta.label(),
-                        meta.badgeBg(),
-                        meta.badgeBorder(),
-                        meta.badgeText(),
-                        meta.subjectPrefix(),
-                        meta.headline(),
-                        "Nuestro motor documental generó el Acta de Cierre Empresarial en formato PDF firmable (adjunta en este correo y lista para descarga directa en EventoMax).",
-                        meta.ctaLabel()
-                );
-            }
             String cleanProductionName = safeOrFallback(payload.productionName(), "Producción EventoMax");
 
             MimeMessage message = mailSender.createMimeMessage();
@@ -144,13 +127,6 @@ public class SmtpEmailSender implements EmailSender {
             ClassPathResource logoResource = new ClassPathResource(LOGO_RESOURCE_PATH);
             if (logoResource.exists()) {
                 helper.addInline(LOGO_CONTENT_ID, logoResource, "image/png");
-            }
-
-            if (closurePdfBytes != null) {
-                String attachmentName = "Acta-Cierre-Produccion-" + payload.productionId() + ".pdf";
-                helper.addAttachment(attachmentName, new ByteArrayResource(closurePdfBytes), "application/pdf");
-                log.info("[SMTP_ATTACHMENT_ADDED] Adjuntada {} ({} bytes) al correo de cierre para productionId={}",
-                        attachmentName, closurePdfBytes.length, payload.productionId());
             }
 
             // Despacho SMTP
@@ -192,6 +168,50 @@ public class SmtpEmailSender implements EmailSender {
             ));
             throw e;
         }
+    }
+
+    @Override
+    public void sendClosure(MessageEnvelope<EmailProductionStatusPayload> envelope, UUID deliveryId,
+                            UUID documentId, byte[] pdf, String sha256) {
+        var p = envelope.payload();
+        if (!"CERRADO".equals(normalizeStatus(p.status())) || !RecipientCheck.valid(p.recipientEmail())) {
+            throw new ClosurePreflightException("NO_AUTHORIZED_CLOSURE_CONTACT");
+        }
+        try { ClosurePdf.verify(pdf, p.productionId(), documentId, sha256, pdf.length, closureMaxPdfBytes); }
+        catch (RuntimeException ex) { throw new ClosurePreflightException("INVALID_CLOSURE_ATTACHMENT"); }
+        MimeMessage message = mailSender.createMimeMessage();
+        try {
+            var meta = resolveStatusPresentation("CERRADO");
+            meta = new StatusPresentation(meta.label(), meta.badgeBg(), meta.badgeBorder(), meta.badgeText(),
+                    meta.subjectPrefix(), meta.headline(),
+                    "Nuestro motor documental generó el Acta de Cierre Empresarial en formato PDF firmable (adjunta en este correo y lista para descarga directa en EventoMax).",
+                    meta.ctaLabel());
+            var helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(p.recipientEmail().trim());
+            helper.setSubject(String.format("EventoMax · %s (#%d) — %s", meta.subjectPrefix(), p.productionId(),
+                    safeOrFallback(p.productionName(), "Producción EventoMax")));
+            String action = buildActionUrl(p.productionId(), "CERRADO");
+            helper.setText(buildTextContent(p, meta, action, envelope.traceId(), envelope.eventId()),
+                    buildHtmlContent(p, meta, action, envelope.traceId(), envelope.eventId()));
+            var logo = new ClassPathResource(LOGO_RESOURCE_PATH);
+            if (logo.exists()) helper.addInline(LOGO_CONTENT_ID, logo, "image/png");
+            helper.addAttachment("Acta-Cierre-Produccion-" + p.productionId() + ".pdf",
+                    new ByteArrayResource(pdf), "application/pdf");
+            message.setHeader("X-EventoMax-Production-Id", p.productionId().toString());
+            message.setHeader("X-EventoMax-Event-Id", envelope.eventId());
+            message.setHeader("X-EventoMax-Trace-Id", envelope.traceId());
+            message.setHeader("X-EventoMax-Correlation-Id", envelope.correlationId());
+            message.setHeader("X-EventoMax-Delivery-Id", deliveryId.toString());
+            message.setHeader("X-EventoMax-Document-SHA256", sha256);
+            String domain = new jakarta.mail.internet.InternetAddress(fromEmail, true).getAddress().split("@", 2)[1];
+            message.setHeader("Message-ID", "<closure-" + deliveryId + "@" + domain + ">");
+        } catch (MessagingException | UnsupportedEncodingException | IllegalArgumentException ex) {
+            throw new ClosurePreflightException("CLOSURE_MIME_INVALID");
+        }
+        // No DB writes here: acceptance followed by audit failure is UNKNOWN, never an automatic resend.
+        mailSender.send(message);
+        log.info("CLOSURE_SMTP_RETURNED productionId={}, deliveryId={}", p.productionId(), deliveryId);
     }
 
     private String buildTextContent(EmailProductionStatusPayload p, StatusPresentation meta, String actionUrl, String traceId, String eventId) {
@@ -350,52 +370,6 @@ public class SmtpEmailSender implements EmailSender {
             url.append("&action=view-ticket");
         }
         return url.toString();
-    }
-
-    private byte[] resolveClosurePdfWithRetry(Long productionId) {
-        String filename = "quote-production-" + productionId + "-latest.pdf";
-        long deadline = System.currentTimeMillis() + Math.max(0L, closurePdfWaitMaxMs);
-
-        while (true) {
-            byte[] found = tryReadClosurePdfOnce(filename);
-            if (found != null && found.length > 0) {
-                return found;
-            }
-            if (System.currentTimeMillis() >= deadline) {
-                break;
-            }
-            try {
-                Thread.sleep(250L);
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-        log.debug("Acta PDF aún no disponible al despachar correo para productionId={}", productionId);
-        return null;
-    }
-
-    private byte[] tryReadClosurePdfOnce(String filename) {
-        if (documentStorageService != null) {
-            try {
-                if (documentStorageService.documentExists("quotes", filename)) {
-                    return documentStorageService.retrieveDocument("quotes", filename);
-                }
-            } catch (Exception e) {
-                log.debug("Lectura de DocumentStorageService omitida para {}: {}", filename, e.getMessage());
-            }
-        }
-        if (quoteOutputDir != null && !quoteOutputDir.isBlank()) {
-            try {
-                Path localFile = Path.of(quoteOutputDir).toAbsolutePath().normalize().resolve(filename);
-                if (Files.exists(localFile)) {
-                    return Files.readAllBytes(localFile);
-                }
-            } catch (Exception e) {
-                log.debug("Lectura local de Acta PDF omitida para {}: {}", filename, e.getMessage());
-            }
-        }
-        return null;
     }
 
     private StatusPresentation resolveStatusPresentation(String rawStatus) {

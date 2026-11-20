@@ -72,6 +72,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
                 "spring.datasource.password=",
                 "spring.jpa.hibernate.ddl-auto=create-drop",
                 "spring.flyway.enabled=false",
+                "eventomax.notify.closure.enabled=false",
+                "eventomax.notify.storage.local.base-dir=./target/rabbit-it-storage",
                 "eventomax.notify.retry.max-attempts=3",
                 "eventomax.notify.quote.provider=legacy",
                 "eventomax.notify.retry.initial-interval-ms=40",

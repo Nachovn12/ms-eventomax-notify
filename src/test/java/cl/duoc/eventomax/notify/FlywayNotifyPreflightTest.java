@@ -5,10 +5,6 @@ import org.flywaydb.core.api.output.MigrateResult;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -19,23 +15,11 @@ import static org.junit.jupiter.api.Assertions.*;
 public class FlywayNotifyPreflightTest {
 
     @Test
-    @DisplayName("Preflight 2: Flyway nativo aplica V1__create_notify_tables.sql en base descartable")
+    @DisplayName("Flyway aplica V1 y V2 exclusivamente en H2 descartable, sin credenciales locales")
     void testFlywayV1NotifyOnDisposable() throws Exception {
-        File pwFile = new File("C:/Users/Nacho/Desktop/Cloud Native/.local-cert/postgres_password.txt");
-        boolean localPostgresReachable = pwFile.exists() && isPortOpen("127.0.0.1", 5432, 500);
-
-        String jdbcUrl;
-        String dbUser;
-        String dbPassword;
-        if (localPostgresReachable) {
-            jdbcUrl = "jdbc:postgresql://127.0.0.1:5432/eventomax_test_notify_disposable";
-            dbUser = "postgres";
-            dbPassword = Files.readString(pwFile.toPath()).trim();
-        } else {
-            jdbcUrl = "jdbc:h2:mem:eventomax_test_notify_disposable;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1";
-            dbUser = "sa";
-            dbPassword = "";
-        }
+        String jdbcUrl = "jdbc:h2:mem:eventomax_test_notify_disposable;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1";
+        String dbUser = "sa";
+        String dbPassword = "";
 
         Flyway flyway = Flyway.configure()
                 .dataSource(jdbcUrl, dbUser, dbPassword)
@@ -48,7 +32,7 @@ public class FlywayNotifyPreflightTest {
         String currentVersion = (result.targetSchemaVersion != null)
                 ? result.targetSchemaVersion
                 : (flyway.info().current() != null ? flyway.info().current().getVersion().getVersion() : null);
-        assertEquals("1", currentVersion);
+        assertEquals("2", currentVersion);
 
         try (Connection conn = DriverManager.getConnection(jdbcUrl, dbUser, dbPassword);
              Statement stmt = conn.createStatement()) {
@@ -85,12 +69,4 @@ public class FlywayNotifyPreflightTest {
         }
     }
 
-    private static boolean isPortOpen(String host, int port, int timeoutMs) {
-        try (Socket socket = new Socket()) {
-            socket.connect(new InetSocketAddress(host, port), timeoutMs);
-            return true;
-        } catch (Exception ignored) {
-            return false;
-        }
-    }
 }

@@ -114,3 +114,21 @@ El proveedor logging sigue siendo una simulación, sin enviar correos.
 
 La inspección previa de EC2 está en [NOTIFY-2A-READONLY-EC2.md](docs/NOTIFY-2A-READONLY-EC2.md).
 Esta fase no cambia ACK, idempotencia SMTP, migraciones ni coordinación correo/PDF.
+
+### Coordinación durable Notify 2B
+
+Los comandos de cierre se confirman después de persistir Inbox e intención. El worker
+genera el acta empresarial en una key inmutable, verifica identidad y checksum y adjunta
+esos bytes exactos. Un resultado SMTP ambiguo queda UNKNOWN sin reenvío automático.
+CONFIRMADO y EN_MONTAJE conservan su flujo anterior. La descarga existente consulta el
+registro durable y mantiene acceso a documentos históricos sin registro nuevo.
+
+`NOTIFY_CLOSURE_DISPATCH_ENABLED=false` mantiene el despacho durable pausado por defecto.
+La migración V2 es aditiva y se incluye para revisión; no se ejecutó en producción.
+Consultar [diseño y activación/rollback](docs/NOTIFY-2B-DESIGN.md) y
+[validación local](docs/NOTIFY-2B-VALIDATION.md) antes de autorizar cualquier despliegue.
+
+```bash
+# Docker local requerido. Incluye regresión y broker/base efímeros; nunca usar producción.
+./mvnw -B -ntp '-Dtest=*Test,*Tests,EmailRetryRabbitIT' verify
+```

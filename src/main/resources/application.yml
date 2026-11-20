@@ -63,6 +63,14 @@ server:
 
 eventomax:
   notify:
+    closure:
+      enabled: ${NOTIFY_CLOSURE_ENABLED:true}
+      generation-enabled: ${NOTIFY_CLOSURE_GENERATION_ENABLED:true}
+      dispatch-enabled: ${NOTIFY_CLOSURE_DISPATCH_ENABLED:false}
+      lease: ${NOTIFY_CLOSURE_LEASE:2m}
+      document-wait: ${NOTIFY_CLOSURE_DOCUMENT_WAIT:15m}
+      max-attempts: ${NOTIFY_CLOSURE_MAX_ATTEMPTS:5}
+      max-pdf-bytes: ${NOTIFY_CLOSURE_MAX_PDF_BYTES:10000000}
     email:
       provider: ${EVENTOMAX_NOTIFY_EMAIL_PROVIDER:smtp}
     crew:

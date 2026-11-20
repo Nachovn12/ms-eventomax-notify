@@ -33,6 +33,8 @@ public class S3DocumentStorageService implements DocumentStorageService {
         this.prefix = prefix != null ? prefix : "";
         this.s3Client = S3Client.builder()
                 .region(Region.of(region))
+                .overrideConfiguration(c -> c.apiCallTimeout(java.time.Duration.ofSeconds(15))
+                        .apiCallAttemptTimeout(java.time.Duration.ofSeconds(5)))
                 .build();
     }
 
@@ -94,6 +96,19 @@ public class S3DocumentStorageService implements DocumentStorageService {
     private String buildKey(String category, String filename) {
         String cleanPrefix = prefix.endsWith("/") ? prefix : prefix + "/";
         return cleanPrefix + category + "/" + filename;
+    }
+
+    @Override
+    public boolean storeDocumentIfAbsent(String category, String filename, byte[] content, String contentType) {
+        var request = PutObjectRequest.builder().bucket(bucketName).key(buildKey(category, filename))
+                .contentType(contentType).overrideConfiguration(c -> c.putHeader("If-None-Match", "*")).build();
+        try {
+            s3Client.putObject(request, RequestBody.fromBytes(content));
+            return true;
+        } catch (software.amazon.awssdk.services.s3.model.S3Exception ex) {
+            if (ex.statusCode() == 412) return false;
+            throw ex;
+        }
     }
 }
 

@@ -28,9 +28,9 @@ class GenerateRealClosureDocumentsTest {
 
     private final OpenPdfClosureDocumentGenerator generator = new OpenPdfClosureDocumentGenerator();
 
-    private final Path quotesDir = Path.of("..", ".local-cert", "quotes").toAbsolutePath().normalize();
+    private final Path quotesDir = Path.of("target", "test-output", "realistic-fixtures", "quotes").toAbsolutePath().normalize();
     private final Path nestedQuotesDir = quotesDir.resolve("quotes");
-    private final Path artifactDir = Path.of("C:\\Users\\Nacho\\.gemini\\antigravity\\brain\\5e0f0167-5025-4419-8ed1-9717cb4b66f2");
+    private final Path artifactDir = Path.of("target", "test-output", "realistic-fixtures", "previews").toAbsolutePath().normalize();
 
     private static final AdministrativeDeclarationDTO COMMON_ADMIN_DECL = new AdministrativeDeclarationDTO(
             "La producción ha alcanzado su estado terminal CERRADO. Los recursos han sido consolidados administrativamente.",

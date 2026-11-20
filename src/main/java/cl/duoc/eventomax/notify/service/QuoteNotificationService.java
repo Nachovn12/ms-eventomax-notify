@@ -72,6 +72,15 @@ public class QuoteNotificationService {
         return outputDir;
     }
 
+    /** Durable path: enterprise only; no mutable alias, local shadow copy, or swallowed storage failure. */
+    public byte[] generateDurableClosure(MessageEnvelope<QuoteCommandPayload> envelope, java.util.UUID documentId) {
+        if ("legacy".equalsIgnoreCase(quoteProvider) || documentBuilder == null || openPdfGenerator == null) {
+            throw new cl.duoc.eventomax.notify.closure.ClosurePreflightException("ENTERPRISE_GENERATOR_REQUIRED");
+        }
+        byte[] bytes = openPdfGenerator.generatePdfBytes(documentBuilder.build(envelope), false);
+        return cl.duoc.eventomax.notify.closure.ClosurePdf.identify(bytes, envelope.payload().productionId(), documentId);
+    }
+
     public Path processQuoteGeneration(MessageEnvelope<QuoteCommandPayload> envelope) {
         if (envelope == null || envelope.payload() == null) {
             throw new IllegalArgumentException("El envelope y payload de Quote no pueden ser nulos");

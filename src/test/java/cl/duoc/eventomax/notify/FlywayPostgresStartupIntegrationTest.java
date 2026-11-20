@@ -30,6 +30,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest(properties = {
         "spring.jpa.hibernate.ddl-auto=validate",
+        "eventomax.notify.storage.local.base-dir=./target/flyway-startup-storage",
+        "eventomax.notify.quote.output-dir=./target/flyway-startup-quotes",
         "spring.jpa.properties.hibernate.default_schema=notify",
         "spring.flyway.enabled=true",
         "spring.flyway.locations=classpath:db/migration",
@@ -91,11 +93,11 @@ class FlywayPostgresStartupIntegrationTest {
     private NotificationDeliveryAuditRepository notificationDeliveryAuditRepository;
 
     @Test
-    @DisplayName("Spring Boot 4.1.1 ejecuta Flyway V1 en esquema notify antes de ddl-auto=validate en PostgreSQL")
+    @DisplayName("Spring Boot ejecuta Flyway V1 y V2 en Notify antes de Hibernate validate en PostgreSQL efímero")
     void flywayMigratesNotifySchemaBeforeHibernateValidation() {
         assertNotNull(flyway, "El bean Flyway debe estar autoconfigurado por spring-boot-starter-flyway");
         assertNotNull(flyway.info().current(), "La migración V1 debe haberse aplicado al iniciar el contexto");
-        assertEquals("1", flyway.info().current().getVersion().getVersion());
+        assertEquals("2", flyway.info().current().getVersion().getVersion());
 
         Integer historyCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM notify.flyway_schema_history WHERE version = '1' AND success = true",

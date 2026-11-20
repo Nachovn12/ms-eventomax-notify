@@ -2,7 +2,9 @@ package cl.duoc.eventomax.notify.sender;
 
 import cl.duoc.eventomax.notify.messaging.email.EmailProductionStatusPayload;
 import cl.duoc.eventomax.notify.repository.NotificationDeliveryAuditRepository;
-import cl.duoc.eventomax.notify.storage.DocumentStorageService;
+import cl.duoc.eventomax.notify.closure.ClosurePdf;
+import cl.duoc.eventomax.notify.messaging.common.MessageEnvelope;
+import java.util.UUID;
 import jakarta.mail.BodyPart;
 import jakarta.mail.Multipart;
 import jakarta.mail.Part;
@@ -35,14 +37,12 @@ class SmtpEmailSenderTest {
 
     private CapturingJavaMailSender mailSender;
     private NotificationDeliveryAuditRepository auditRepository;
-    private DocumentStorageService documentStorageService;
     private SmtpEmailSender smtpEmailSender;
 
     @BeforeEach
     void setUp() {
         mailSender = new CapturingJavaMailSender();
         auditRepository = Mockito.mock(NotificationDeliveryAuditRepository.class);
-        documentStorageService = Mockito.mock(DocumentStorageService.class);
         smtpEmailSender = new SmtpEmailSender(
                 mailSender,
                 auditRepository,
@@ -50,8 +50,6 @@ class SmtpEmailSenderTest {
                 "EventoMax Notificaciones"
         );
         ReflectionTestUtils.setField(smtpEmailSender, "portalUrl", "http://localhost:4200/productions");
-        ReflectionTestUtils.setField(smtpEmailSender, "documentStorageService", documentStorageService);
-        ReflectionTestUtils.setField(smtpEmailSender, "closurePdfWaitMaxMs", 0L);
     }
 
     @AfterEach
@@ -105,9 +103,14 @@ class SmtpEmailSenderTest {
         MDC.put("traceId", "trace-close-01");
         MDC.put("correlationId", "evt-close-01");
 
-        byte[] samplePdf = "%PDF-1.5 sample closure pdf".getBytes(StandardCharsets.UTF_8);
-        when(documentStorageService.documentExists("quotes", "quote-production-145-latest.pdf")).thenReturn(true);
-        when(documentStorageService.retrieveDocument("quotes", "quote-production-145-latest.pdf")).thenReturn(samplePdf);
+        UUID documentId = UUID.randomUUID();
+        var out = new java.io.ByteArrayOutputStream();
+        var document = new com.lowagie.text.Document();
+        com.lowagie.text.pdf.PdfWriter.getInstance(document, out);
+        document.open();
+        document.add(new com.lowagie.text.Paragraph("Test closure"));
+        document.close();
+        byte[] samplePdf = ClosurePdf.identify(out.toByteArray(), 145L, documentId);
 
         EmailProductionStatusPayload payload = new EmailProductionStatusPayload(
                 145L,
@@ -119,7 +122,8 @@ class SmtpEmailSenderTest {
                 "Espacio Riesco"
         );
 
-        smtpEmailSender.send(payload);
+        smtpEmailSender.sendClosure(new MessageEnvelope<>("SendProductionStatusEmail", "email-fixture", "2026-11-20T20:00:00Z",
+                "trace-close-01", "corr-close-01", payload), UUID.randomUUID(), documentId, samplePdf, ClosurePdf.sha256(samplePdf));
 
         MimeMessage mime = mailSender.sentMessages.getFirst();
         mime.saveChanges();
@@ -202,6 +206,15 @@ class SmtpEmailSenderTest {
                             .isInstanceOf(MissingRecipientContactException.class);
                     assertThat(mailSender.sentMessages).isEmpty();
                 });
+    }
+
+    @Test
+    void directClosureSendWithoutDurableAttachmentIsBlocked() {
+        var payload = new EmailProductionStatusPayload(8L,"org-fixture","organizer@example.invalid",
+                "Isolated event","CERRADO","2026-12-01T18:00:00","Fixture venue");
+        assertThatThrownBy(() -> smtpEmailSender.send(payload)).isInstanceOf(IllegalStateException.class)
+                .hasMessage("DURABLE_CLOSURE_REQUIRED");
+        assertThat(mailSender.sentMessages).isEmpty();
     }
 
     private void collectParts(Object content, ExtractedParts out) throws Exception {

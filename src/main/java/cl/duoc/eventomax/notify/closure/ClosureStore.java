@@ -147,14 +147,17 @@ public class ClosureStore {
     public void reconcile() {
         tx.executeWithoutResult(status -> {
             // An expired SMTP claim is ambiguous, including a crash before the actual socket write.
+            // Match finish(): lock deliveries before attempts. RETURNING preserves the exact expired
+            // lease identity after SENDING becomes UNKNOWN, without touching another lease's attempt.
             jdbc.update("""
+                    WITH expired AS (
+                        UPDATE notify.closure_deliveries SET state='UNKNOWN', error_code='LEASE_EXPIRED'
+                        WHERE state='SENDING' AND lease_until <= CURRENT_TIMESTAMP
+                        RETURNING id, lease_token
+                    )
                     UPDATE notify.closure_smtp_attempts a SET state='UNKNOWN', error_code='LEASE_EXPIRED', finished_at=CURRENT_TIMESTAMP
-                    FROM notify.closure_deliveries j WHERE a.delivery_id=j.id AND a.lease_token=j.lease_token
-                    AND a.state='SENDING' AND j.state='SENDING' AND j.lease_until <= CURRENT_TIMESTAMP
-                    """);
-            jdbc.update("""
-                    UPDATE notify.closure_deliveries SET state='UNKNOWN', error_code='LEASE_EXPIRED'
-                    WHERE state='SENDING' AND lease_until <= CURRENT_TIMESTAMP
+                    FROM expired e WHERE a.delivery_id=e.id AND a.lease_token=e.lease_token
+                    AND a.state='SENDING'
                     """);
             jdbc.update("""
                     UPDATE notify.closure_documents SET state=CASE WHEN attempts >= ? THEN 'FAILED' ELSE 'RETRY_WAIT' END,

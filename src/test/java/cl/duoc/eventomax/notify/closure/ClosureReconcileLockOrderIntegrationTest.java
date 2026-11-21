@@ -40,7 +40,7 @@ class ClosureReconcileLockOrderIntegrationTest {
     static DriverManagerDataSource database;
     static JdbcTemplate jdbc;
     @TempDir Path temp;
-    final ClosureSettings settings = new ClosureSettings(true, false, true, Duration.ofSeconds(30), Duration.ofMinutes(15), 3, 10000000);
+    final ClosureSettings settings = new ClosureSettings(true, true, false, true, Duration.ofSeconds(30), Duration.ofMinutes(15), 3, 10000000, List.of(41L));
     final ObjectMapper json = new ObjectMapper();
     ObservedDataSource observed;
     ClosureStore store;

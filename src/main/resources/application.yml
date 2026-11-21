@@ -29,6 +29,7 @@ spring:
       simple:
         acknowledge-mode: manual
         default-requeue-rejected: false
+        auto-startup: ${SPRING_RABBITMQ_LISTENER_SIMPLE_AUTO_STARTUP:true}
   mail:
     host: ${SPRING_MAIL_HOST:${SMTP_HOST:127.0.0.1}}
     port: ${SPRING_MAIL_PORT:${SMTP_PORT:1025}}
@@ -65,8 +66,10 @@ eventomax:
   notify:
     closure:
       enabled: ${NOTIFY_CLOSURE_ENABLED:true}
+      worker-enabled: ${NOTIFY_CLOSURE_WORKER_ENABLED:false}
       generation-enabled: ${NOTIFY_CLOSURE_GENERATION_ENABLED:true}
       dispatch-enabled: ${NOTIFY_CLOSURE_DISPATCH_ENABLED:false}
+      authorized-productions: ${NOTIFY_CLOSURE_AUTHORIZED_PRODUCTIONS:}
       lease: ${NOTIFY_CLOSURE_LEASE:2m}
       document-wait: ${NOTIFY_CLOSURE_DOCUMENT_WAIT:15m}
       max-attempts: ${NOTIFY_CLOSURE_MAX_ATTEMPTS:5}

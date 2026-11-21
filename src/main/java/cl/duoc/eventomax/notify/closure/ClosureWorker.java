@@ -32,6 +32,9 @@ public class ClosureWorker {
 
     @Scheduled(fixedDelayString = "${eventomax.notify.closure.poll-ms:1000}")
     public void tick() {
+        if (!settings.workerEnabled()) {
+            return;
+        }
         try {
             store.reconcile();
             if (settings.generationEnabled()) generateOne();
@@ -44,7 +47,7 @@ public class ClosureWorker {
     }
 
     public void generateOne() {
-        if (!settings.generationEnabled()) return;
+        if (!settings.workerEnabled() || !settings.generationEnabled()) return;
         var claimed = store.claimDocument();
         if (claimed.isEmpty()) return;
         var doc = claimed.get();
@@ -75,7 +78,7 @@ public class ClosureWorker {
     }
 
     public void sendOne() {
-        if (!settings.dispatchEnabled()) return;
+        if (!settings.workerEnabled() || !settings.dispatchEnabled()) return;
         // Missing/disabled SMTP provider never consumes a claim and never reports a simulated send as accepted.
         var sender = transport.getIfAvailable();
         if (sender == null) return;

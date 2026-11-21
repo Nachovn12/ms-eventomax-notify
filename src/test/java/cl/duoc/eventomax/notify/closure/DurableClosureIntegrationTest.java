@@ -62,7 +62,7 @@ class DurableClosureIntegrationTest {
     static JdbcTemplate jdbc;
     @TempDir Path temp;
     final ObjectMapper json = new ObjectMapper();
-    final ClosureSettings settings = new ClosureSettings(true, true, true, Duration.ofSeconds(30), Duration.ofMinutes(15), 3, 10000000);
+    final ClosureSettings settings = new ClosureSettings(true, true, true, true, Duration.ofSeconds(30), Duration.ofMinutes(15), 3, 10000000, List.of(8L, 9L));
     ClosureStore store;
     DocumentStorageService storage;
     QuoteNotificationService generator;
@@ -313,7 +313,7 @@ class DurableClosureIntegrationTest {
     @Test void pausedDispatcherCannotSend() {
         store.acceptEmail(email(8,"email-8")); ready(8);
         var beans = new StaticListableBeanFactory(); beans.addBean("smtp",sender);
-        var paused = new ClosureSettings(true,true,false,settings.lease(),settings.documentWait(),3,10000000);
+        var paused = new ClosureSettings(true, true, true, false, settings.lease(), settings.documentWait(), 3, 10000000, List.of(8L, 9L));
         new ClosureWorker(store,generator,storage,beans.getBeanProvider(ClosureEmailTransport.class),paused).sendOne();
         assertThat(state(8)).isEqualTo("READY"); assertThat(smtp.submissions.get()).isZero();
     }

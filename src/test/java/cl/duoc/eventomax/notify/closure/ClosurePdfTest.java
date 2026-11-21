@@ -6,6 +6,7 @@ import com.lowagie.text.pdf.PdfWriter;
 import org.junit.jupiter.api.Test;
 import java.io.ByteArrayOutputStream;
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 import static org.assertj.core.api.Assertions.*;
 
@@ -38,7 +39,7 @@ class ClosurePdfTest {
         assertThat(RecipientCheck.valid(null)).isFalse();
     }
     @Test void refusesInvalidWorkerLimits() {
-        assertThatThrownBy(() -> new ClosureSettings(true, true, false, Duration.ZERO, Duration.ofMinutes(15), 5, 10000000))
+        assertThatThrownBy(() -> new ClosureSettings(true, true, true, false, Duration.ZERO, Duration.ofMinutes(15), 5, 10000000, List.of()))
                 .isInstanceOf(IllegalArgumentException.class);
     }
     @Test void ambiguousTransportNeverBecomesRetryable() {

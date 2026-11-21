@@ -187,12 +187,23 @@ public class ClosureStore {
     }
 
     public Optional<Delivery> claimDelivery() {
+        if (!settings.dispatchEnabled() || settings.authorizedProductions().isEmpty()) {
+            return Optional.empty();
+        }
         return tx.execute(status -> {
-            var candidates = jdbc.query("""
-                    SELECT * FROM notify.closure_deliveries WHERE state IN ('READY','RETRY_WAIT')
-                    AND next_attempt_at <= CURRENT_TIMESTAMP AND attempts < ?
-                    ORDER BY created_at, id LIMIT 1 FOR UPDATE SKIP LOCKED
-                    """, DELIVERY, settings.maxAttempts());
+            Long[] cohort = settings.authorizedProductions().toArray(Long[]::new);
+            var candidates = jdbc.query(con -> {
+                var ps = con.prepareStatement("""
+                        SELECT * FROM notify.closure_deliveries
+                        WHERE state IN ('READY','RETRY_WAIT')
+                          AND production_id = ANY(?)
+                          AND next_attempt_at <= CURRENT_TIMESTAMP AND attempts < ?
+                        ORDER BY created_at, id LIMIT 1 FOR UPDATE SKIP LOCKED
+                        """);
+                ps.setArray(1, con.createArrayOf("bigint", cohort));
+                ps.setInt(2, settings.maxAttempts());
+                return ps;
+            }, DELIVERY);
             if (candidates.isEmpty()) return Optional.empty();
             UUID id = candidates.getFirst().id(), token = UUID.randomUUID();
             jdbc.update("""

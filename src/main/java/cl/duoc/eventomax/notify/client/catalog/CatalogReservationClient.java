@@ -41,8 +41,18 @@ public interface CatalogReservationClient {
             Long equipmentId,
             String equipmentName,
             Integer quantity,
-            String reservationStatus
-    ) {}
+            String reservationStatus,
+            Long reservationId
+    ) {
+        public CatalogReservationItem(
+                Long equipmentId,
+                String equipmentName,
+                Integer quantity,
+                String reservationStatus
+        ) {
+            this(equipmentId, equipmentName, quantity, reservationStatus, null);
+        }
+    }
 
     record CatalogReservationResult(
             CatalogAvailabilityState state,

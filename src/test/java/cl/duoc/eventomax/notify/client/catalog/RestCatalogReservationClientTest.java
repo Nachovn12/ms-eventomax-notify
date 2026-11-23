@@ -52,6 +52,7 @@ class RestCatalogReservationClientTest {
 
         assertEquals(CatalogReservationClient.CatalogAvailabilityState.AVAILABLE, res.state());
         assertEquals(1, res.items().size());
+        assertEquals(1L, res.items().getFirst().reservationId());
         assertEquals(101L, res.items().getFirst().equipmentId());
         assertEquals("Consola DiGiCo Quantum", res.items().getFirst().equipmentName());
         assertEquals(2, res.items().getFirst().quantity());
@@ -126,6 +127,7 @@ class RestCatalogReservationClientTest {
                 """);
         assertEquals(CatalogReservationClient.CatalogAvailabilityState.AVAILABLE, result.state());
         assertEquals("RELEASED", result.items().get(0).reservationStatus());
+        assertNull(result.items().get(0).reservationId());
         assertNull(result.items().get(1).reservationStatus());
         assertNull(result.items().get(1).equipmentName());
     }

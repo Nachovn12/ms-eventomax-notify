@@ -220,4 +220,94 @@ class QuoteCommandCrossContractTest {
             assertEquals(99L, envelope.payload().productionId());
         });
     }
+
+    @Test
+    @DisplayName("4. Contrato Diseño C (21 campos): Deserialización fiel del JSON emitido por Productions PR #31")
+    void test4_designC21FieldJsonFromProductions_deserializedAndMappedAccurately() throws Exception {
+        String designCWireJson = """
+        {
+          "type": "GenerateClosingQuote",
+          "eventId": "rmq-cmd-design-c-001",
+          "timestamp": "2026-11-23T01:00:00Z",
+          "traceId": "trace-design-c-001",
+          "correlationId": "corr-design-c-001",
+          "payload": {
+            "productionId": 42,
+            "organizerId": "11111111-1111-1111-1111-111111111111:22222222-2222-2222-2222-222222222222",
+            "productionName": "Cumbre Ficticia Diseño C 2026",
+            "status": "CERRADO",
+            "scheduledAt": "2026-12-15T19:00",
+            "location": "Recinto Ficticio — Santiago",
+            "closedAt": "2026-11-23T00:59:55Z",
+            "createdAt": "2026-11-20T14:00:00",
+            "organizerContactMaskedEmail": "or*******@ejemplo.invalid",
+            "organizerContactName": "Contacto Externo Ficticio",
+            "organizerContactPhone": null,
+            "services": [
+              {
+                "serviceId": 10,
+                "serviceName": "Ingeniería de Sonido FOH (Prueba)",
+                "unitPrice": 950000.00,
+                "contractedAt": "2026-11-20T15:00:00"
+              }
+            ],
+            "equipment": null,
+            "timeline": [
+              {
+                "sequenceIndex": 1,
+                "fromStatus": null,
+                "toStatus": "SOLICITADO",
+                "occurredAt": "2026-11-20T14:00:00Z",
+                "actor": "11111111-1111-1111-1111-111111111111:22222222-2222-2222-2222-222222222222",
+                "eventId": "evt-hist-001"
+              },
+              {
+                "sequenceIndex": 2,
+                "fromStatus": "EN_EJECUCION",
+                "toStatus": "CERRADO",
+                "occurredAt": "2026-11-23T00:59:55Z",
+                "actor": "11111111-1111-1111-1111-111111111111:33333333-3333-3333-3333-333333333333",
+                "eventId": "evt-close-002",
+                "actorDisplayName": "Carlos Paredes Ficticio"
+              }
+            ],
+            "kafkaClosingEventId": "evt-close-002",
+            "closingActorOid": "11111111-1111-1111-1111-111111111111:33333333-3333-3333-3333-333333333333",
+            "organizerDisplayName": "Andrea Morales Ficticia",
+            "organizerResolutionSource": "ENTRA_GRAPH",
+            "closingActorDisplayName": "Carlos Paredes Ficticio",
+            "crewId": "crew-prueba-sur",
+            "crewName": "Cuadrilla Técnica Ficticia Sur"
+          }
+        }
+        """;
+
+        MessageEnvelope<QuoteCommandPayload> envelope = objectMapper.readValue(
+                designCWireJson,
+                new TypeReference<>() {}
+        );
+
+        QuoteCommandPayload payload = envelope.payload();
+        assertEquals("Andrea Morales Ficticia", payload.organizerDisplayName());
+        assertEquals("ENTRA_GRAPH", payload.organizerResolutionSource());
+        assertEquals("Carlos Paredes Ficticio", payload.closingActorDisplayName());
+        assertEquals("crew-prueba-sur", payload.crewId());
+        assertEquals("Cuadrilla Técnica Ficticia Sur", payload.crewName());
+        assertNull(payload.timeline().get(0).actorDisplayName(), "Evento histórico sin actorDisplayName debe quedar null");
+        assertEquals("Carlos Paredes Ficticio", payload.timeline().get(1).actorDisplayName());
+
+        ProductionClosureDocumentDTO doc = builder.build(envelope);
+        assertEquals("ACTA DE CIERRE OPERATIVO", doc.metadata().documentTitle());
+        assertEquals("2.0", doc.metadata().version());
+        assertEquals("Andrea Morales Ficticia", doc.organizer().organizerDisplayName());
+        assertEquals("ENTRA_GRAPH", doc.organizer().resolutionSource());
+        assertEquals("Carlos Paredes Ficticio", doc.traceability().closingActorDisplayName());
+        assertNotNull(doc.crewAssignment());
+        assertEquals("crew-prueba-sur", doc.crewAssignment().crewId());
+        assertEquals("Cuadrilla Técnica Ficticia Sur", doc.crewAssignment().crewName());
+        assertNull(doc.timeline().get(0).actorDisplayName());
+        assertEquals("Carlos Paredes Ficticio", doc.timeline().get(1).actorDisplayName());
+        assertEquals("Conformidad no gestionada en esta versión", doc.conformity().organizerConformityStatus());
+        assertFalse(doc.conformity().commercialConformityClaimed());
+    }
 }

@@ -199,12 +199,20 @@ public class ProductionClosureDocumentBuilder {
             return List.of();
         }
 
-        List<QuoteCommandPayload.TimelineItemPayload> sorted = new ArrayList<>(items);
+        List<QuoteCommandPayload.TimelineItemPayload> sorted = new ArrayList<>();
+        for (var it : items) {
+            if (it != null) {
+                sorted.add(it);
+            }
+        }
+        if (sorted.isEmpty()) {
+            return List.of();
+        }
+
         sorted.sort(Comparator.comparingInt(it -> it.sequenceIndex() != null ? it.sequenceIndex() : 0));
 
-        List<ProductionClosureDocumentDTO.OperationalTimelineItemDTO> result = new ArrayList<>();
+        List<ProductionClosureDocumentDTO.OperationalTimelineItemDTO> result = new ArrayList<>(sorted.size());
         for (var it : sorted) {
-            if (it == null) continue;
             result.add(new ProductionClosureDocumentDTO.OperationalTimelineItemDTO(
                     it.sequenceIndex() != null ? it.sequenceIndex() : 0,
                     it.fromStatus(),

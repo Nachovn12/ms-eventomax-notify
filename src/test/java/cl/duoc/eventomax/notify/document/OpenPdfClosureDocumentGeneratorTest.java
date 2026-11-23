@@ -192,9 +192,13 @@ class OpenPdfClosureDocumentGeneratorTest {
             assertTrue(page1.contains("EMX-ACTA-PRD-101"));
             assertTrue(page1.contains("Estado: CERRADO"));
             assertTrue(page1.contains("Cumbre Cloud Native Ficticia 2026"));
-            assertTrue(page1.contains("Andrea Morales Ficticia (Resuelto · Microsoft Graph)"));
-            assertTrue(page1.contains("an*******@ejemplo.invalid"));
-            assertTrue(page1.contains("Carlos Paredes Ficticio"));
+            String page1Normalized = page1.replaceAll("\\s+", " ");
+            assertTrue(page1Normalized.contains("Andrea Morales Ficticia (Resuelto · Microsoft Graph)"));
+            assertTrue(page1Normalized.contains("Correo informado en el comando (enmascarado)"));
+            assertTrue(page1Normalized.contains("an*******@ejemplo.invalid"));
+            assertFalse(page1Normalized.contains("Correo de contacto"), "No debe atribuir el correo del comando directamente como correo de contacto del organizador");
+            assertFalse(page1Normalized.contains("Canal de contacto"), "No debe etiquetar el correo del comando como canal de contacto verificado del organizador");
+            assertTrue(page1Normalized.contains("Carlos Paredes Ficticio"));
             assertTrue(page1.contains("Ingeniería de Sonido en Vivo FOH (Prueba)"));
             assertTrue(page1.contains("950,000.00"));
             assertTrue(page1.contains("1,630,000.00"));
@@ -529,6 +533,43 @@ class OpenPdfClosureDocumentGeneratorTest {
             assertFalse(full.contains("VISTA PREVIA"));
             assertFalse(full.contains("NO VÁLIDO PARA CONFORMIDAD"));
             assertTrue(full.contains("ACTA DE CIERRE OPERATIVO"));
+            assertNoForbiddenClaims(full);
+        }
+    }
+
+    @Test
+    @DisplayName("Procedencia de correo: usa etiqueta neutral cuando el comando trae correo sin procedencia verificable")
+    void testEmailProvenanceNeutralLabel_doesNotAttributeCommandEmailToOrganizer() throws IOException {
+        var base = createCompleteFictitiousFixture();
+        // Caso realista: organizador UNRESOLVED o ENTRA_GRAPH sin contacto propio, pero quote.gen incluye correo por defecto enmascarado
+        var orgWithDefaultEmail = new OrganizerIdentityDTO(
+                "00000000-0000-0000-0000-000000000001:cccc0000-0000-4000-8000-000000000777",
+                "de*******@ejemplo.invalid",
+                null,
+                null,
+                null,
+                "UNRESOLVED"
+        );
+        var dto = new ProductionClosureDocumentDTO(
+                base.metadata(), base.production(), orgWithDefaultEmail, base.timeline(),
+                base.equipment(), base.services(), base.crewTicket(), base.administrativeDeclaration(),
+                base.traceability(), base.conformity(), CatalogAvailabilityState.AVAILABLE, base.crewAssignment()
+        );
+
+        byte[] pdfBytes = generator.generatePdfBytes(dto, false);
+        try (PDDocument pd = Loader.loadPDF(pdfBytes)) {
+            assertEquals(2, pd.getNumberOfPages());
+            String page1 = extractPageText(pd, 1).replaceAll("\\s+", " ");
+            String full = extractAllText(pd).replaceAll("\\s+", " ");
+
+            assertTrue(page1.contains("Correo informado en el comando (enmascarado)"),
+                    "Debe usar denominación neutral para el correo del comando");
+            assertTrue(page1.contains("de*******@ejemplo.invalid"),
+                    "Debe conservar exactamente el valor enmascarado sin alterarlo");
+            assertFalse(full.contains("Correo de contacto"),
+                    "No debe atribuir erróneamente el correo al organizador como 'Correo de contacto'");
+            assertFalse(full.contains("Canal de contacto"),
+                    "No debe atribuir erróneamente el correo al organizador como 'Canal de contacto'");
             assertNoForbiddenClaims(full);
         }
     }

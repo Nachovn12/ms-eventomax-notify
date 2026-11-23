@@ -337,7 +337,7 @@ public class OpenPdfClosureDocumentGenerator {
         }
 
         addCleanKV(infoGrid, "Organizador asociado", organizerDisplay, true);
-        addCleanKV(infoGrid, "Correo de contacto", maskedEmail, false);
+        addCleanKV(infoGrid, "Correo informado en el comando (enmascarado)", maskedEmail, false);
 
         if (location.length() <= 55) {
             addCleanKV(infoGrid, "Creación registrada", createdDisplay, false);
@@ -630,7 +630,7 @@ public class OpenPdfClosureDocumentGenerator {
 
         StringBuilder orgLines = new StringBuilder("Organizador: ").append(organizerDisplay);
         if (maskedEmail != null) {
-            orgLines.append("\nCanal de contacto: ").append(maskedEmail);
+            orgLines.append("\nCorreo informado en el comando (enmascarado): ").append(maskedEmail);
         }
         Paragraph p2Body = new Paragraph(orgLines.toString(),
                 new Font(regularBaseFont, 7.6f, Font.NORMAL, SLATE_700));

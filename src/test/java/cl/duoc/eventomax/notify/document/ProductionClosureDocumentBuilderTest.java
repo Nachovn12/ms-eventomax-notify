@@ -1339,5 +1339,56 @@ class ProductionClosureDocumentBuilderTest {
                 "No debe afirmar cierre anticipado sin zonas horarias comparables");
     }
 
+    @Test
+    @DisplayName("26. Robustez del timeline: descarta elementos null antes de ordenar y preserva orden y atributos reales")
+    void test26_buildTimeline_filtersNullElementsBeforeSorting() {
+        List<QuoteCommandPayload.TimelineItemPayload> timelineWithNulls = new java.util.ArrayList<>();
+        timelineWithNulls.add(new QuoteCommandPayload.TimelineItemPayload(
+                3, "EN_EJECUCION", "CERRADO", "2026-11-22T21:14:05Z", "actor-close-oid", "evt-close-3", "Productor Ficticio"));
+        timelineWithNulls.add(null);
+        timelineWithNulls.add(new QuoteCommandPayload.TimelineItemPayload(
+                1, null, "SOLICITADO", "2026-11-20T14:22:10Z", "actor-org-oid", "evt-req-1"));
+        timelineWithNulls.add(null);
+        timelineWithNulls.add(new QuoteCommandPayload.TimelineItemPayload(
+                2, "SOLICITADO", "CONFIRMADO", "2026-11-20T15:05:31Z", "actor-conf-oid", "evt-conf-2", "Coordinadora Ficticia"));
+
+        var payload = new QuoteCommandPayload(
+                66L, "tid:org-66", "Producción Ficticia Timeline Nulos", "CERRADO",
+                "2026-12-10T19:00:00", "Recinto Ficticio", "2026-11-22T21:14:05Z",
+                null, null, null, null, null, null, timelineWithNulls, "evt-close-3", "actor-close-oid"
+        );
+
+        var doc = assertDoesNotThrow(() -> builder.build(createEnvelope(payload)));
+
+        assertEquals(3, doc.timeline().size(), "Debe descartar nulls sin fabricar eventos sintéticos");
+        assertEquals(1, doc.timeline().get(0).sequenceIndex());
+        assertNull(doc.timeline().get(0).fromStatus());
+        assertEquals("SOLICITADO", doc.timeline().get(0).toStatus());
+        assertEquals(Instant.parse("2026-11-20T14:22:10Z"), doc.timeline().get(0).occurredAt());
+        assertEquals("actor-org-oid", doc.timeline().get(0).actorOid());
+        assertNull(doc.timeline().get(0).actorDisplayName(), "Evento histórico de 6 campos debe conservar actorDisplayName=null");
+        assertEquals("evt-req-1", doc.timeline().get(0).eventId());
+
+        assertEquals(2, doc.timeline().get(1).sequenceIndex());
+        assertEquals("CONFIRMADO", doc.timeline().get(1).toStatus());
+        assertEquals("Coordinadora Ficticia", doc.timeline().get(1).actorDisplayName());
+        assertEquals("evt-conf-2", doc.timeline().get(1).eventId());
+
+        assertEquals(3, doc.timeline().get(2).sequenceIndex());
+        assertEquals("CERRADO", doc.timeline().get(2).toStatus());
+        assertEquals("Productor Ficticio", doc.timeline().get(2).actorDisplayName());
+        assertEquals("evt-close-3", doc.timeline().get(2).eventId());
+
+        // Lista compuesta exclusivamente de nulls -> lista vacía sin excepción
+        List<QuoteCommandPayload.TimelineItemPayload> onlyNulls = java.util.Arrays.asList(null, null);
+        var onlyNullsPayload = new QuoteCommandPayload(
+                67L, "tid:org-67", "Producción Solo Nulls", "CERRADO",
+                "2026-12-10T19:00:00", "Recinto Ficticio", "2026-11-22T21:14:05Z",
+                null, null, null, null, null, null, onlyNulls, null, null
+        );
+        var onlyNullsDoc = assertDoesNotThrow(() -> builder.build(createEnvelope(onlyNullsPayload)));
+        assertTrue(onlyNullsDoc.timeline().isEmpty());
+    }
+
 }
 

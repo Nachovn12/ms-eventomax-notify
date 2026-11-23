@@ -252,18 +252,20 @@ class GenerateRealClosureDocumentsTest {
         Files.write(dest1, pdfBytes);
         Files.write(dest2, pdfBytes);
 
-        // Validar que se ajusta a 1 página A4
+        // Validar que genera Diseño C en 2 páginas A4 (P1 Acta Ejecutiva + P2 Anexo Técnico)
         PdfReader reader = new PdfReader(pdfBytes);
-        assertEquals(1, reader.getNumberOfPages(), "El acta de cierre de producción #" + prodId + " debe ajustarse a 1 página A4");
+        assertEquals(2, reader.getNumberOfPages(), "El acta Diseño C de producción #" + prodId + " debe ajustarse a 2 páginas A4 (Ejecutiva + Anexo)");
         reader.close();
 
-        // Renderizar PNG para verificación visual en artifacts
+        // Renderizar PNGs para verificación visual en target/test-output
         try (PDDocument pdDoc = Loader.loadPDF(pdfBytes)) {
             PDFRenderer renderer = new PDFRenderer(pdDoc);
-            BufferedImage image = renderer.renderImageWithDPI(0, 200f, ImageType.RGB);
-            File pngArtifact = artifactDir.resolve("acta_cierre_prod_" + prodId + "_realistic.png").toFile();
-            ImageIO.write(image, "PNG", pngArtifact);
-            assertTrue(pngArtifact.exists());
+            for (int page = 0; page < pdDoc.getNumberOfPages(); page++) {
+                BufferedImage image = renderer.renderImageWithDPI(page, 160f, ImageType.RGB);
+                File pngArtifact = artifactDir.resolve("acta_cierre_prod_" + prodId + "_p" + (page + 1) + ".png").toFile();
+                ImageIO.write(image, "PNG", pngArtifact);
+                assertTrue(pngArtifact.exists());
+            }
         }
     }
 }

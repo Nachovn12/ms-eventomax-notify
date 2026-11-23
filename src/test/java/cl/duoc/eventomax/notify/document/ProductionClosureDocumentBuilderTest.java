@@ -204,7 +204,8 @@ class ProductionClosureDocumentBuilderTest {
 
         assertEquals("EMX-ACTA-PRD-1", doc.metadata().documentCode());
 
-        assertEquals("ACTA DE CIERRE OPERATIVO Y ADMINISTRATIVO DE PRODUCCIÓN", doc.metadata().documentTitle());
+        assertEquals("ACTA DE CIERRE OPERATIVO", doc.metadata().documentTitle());
+        assertEquals("2.0", doc.metadata().version());
 
         assertEquals(FIXED_NOW, doc.metadata().generatedAt());
 
@@ -1132,9 +1133,9 @@ class ProductionClosureDocumentBuilderTest {
 
         assertNotNull(doc.conformity());
 
-        assertEquals("PENDIENTE DE CONFORMIDAD", doc.conformity().producerApprovalStatus());
+        assertEquals("REGISTRADO EN PLATAFORMA", doc.conformity().producerApprovalStatus());
 
-        assertEquals("PENDIENTE DE CONFORMIDAD", doc.conformity().organizerConformityStatus());
+        assertEquals("Conformidad no gestionada en esta versión", doc.conformity().organizerConformityStatus());
 
         assertFalse(doc.conformity().commercialConformityClaimed());
 
@@ -1272,12 +1273,70 @@ class ProductionClosureDocumentBuilderTest {
 
 
 
-        // Validación de encabezado PDF estándar (%PDF-1.4)
+        // Validación de encabezado PDF estándar (%PDF-1.7)
 
         String header = new String(pdfBytes, 0, 8);
 
         assertTrue(header.startsWith("%PDF-"), "El documento generado debe tener un encabezado PDF válido");
 
+    }
+
+    @Test
+    @DisplayName("25. Contrato Diseño C de 21 campos + reservationId desde Catálogo + cuadrilla estructurada sin ticket")
+    void test25_designC21FieldsAndReservationIdPropagation() {
+        var catItems = List.of(
+                new CatalogReservationClient.CatalogReservationItem(10L, "Consola Ficticia 32ch", 2, "RESERVED", 401L),
+                new CatalogReservationClient.CatalogReservationItem(11L, "Generador Ficticio 50kVA", 1, "RELEASED", 402L)
+        );
+        when(catalogReservationClient.getReservationsForProduction(55L))
+                .thenReturn(CatalogReservationClient.CatalogReservationResult.available(catItems));
+        when(crewTicketRepository.findTopByProductionIdOrderByIdDesc(55L)).thenReturn(Optional.empty());
+
+        var timeline = List.of(
+                new QuoteCommandPayload.TimelineItemPayload(1, null, "SOLICITADO", "2026-11-20T14:00:00Z", "tid:org-1", "evt-1", "Organizadora Ficticia"),
+                new QuoteCommandPayload.TimelineItemPayload(2, "SOLICITADO", "CERRADO", "2026-11-22T18:00:00Z", "tid:act-2", "evt-2")
+        );
+
+        var payload = new QuoteCommandPayload(
+                55L,
+                "tid-1:oid-org-55",
+                "Producción Ficticia Diseño C",
+                "CERRADO",
+                "2026-12-10T19:00:00",
+                "Recinto Ficticio Norte",
+                "2026-11-22T18:00:00Z",
+                "2026-11-20T14:00:00",
+                "or*******@ejemplo.invalid",
+                "Contacto Respaldo Ficticio",
+                null,
+                List.of(new QuoteCommandPayload.ContractedServicePayload(3L, "Sonido FOH Ficticio", new BigDecimal("500000.00"), "2026-11-20T15:00:00")),
+                null,
+                timeline,
+                "kfk-evt-55",
+                "tid-1:oid-actor-55",
+                "Organizadora Ficticia",
+                "ENTRA_GRAPH",
+                "Productor Cierre Ficticio",
+                "crew-ficticia-01",
+                "Cuadrilla Técnica Ficticia"
+        );
+
+        var doc = builder.build(createEnvelope(payload));
+
+        assertEquals("Organizadora Ficticia", doc.organizer().organizerDisplayName());
+        assertEquals("ENTRA_GRAPH", doc.organizer().resolutionSource());
+        assertEquals("Productor Cierre Ficticio", doc.traceability().closingActorDisplayName());
+        assertNotNull(doc.crewAssignment());
+        assertEquals("crew-ficticia-01", doc.crewAssignment().crewId());
+        assertEquals("Cuadrilla Técnica Ficticia", doc.crewAssignment().crewName());
+        assertNull(doc.crewTicket(), "No debe fabricar ticket cuando no existe en BD local");
+        assertEquals(2, doc.equipment().size());
+        assertEquals(401L, doc.equipment().get(0).reservationId());
+        assertEquals(402L, doc.equipment().get(1).reservationId());
+        assertEquals("Organizadora Ficticia", doc.timeline().get(0).actorDisplayName());
+        assertNull(doc.timeline().get(1).actorDisplayName());
+        assertFalse(doc.administrativeDeclaration().chronologicalObservation().contains("anterioridad"),
+                "No debe afirmar cierre anticipado sin zonas horarias comparables");
     }
 
 }

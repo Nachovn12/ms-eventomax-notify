@@ -89,7 +89,8 @@ public class RestCatalogReservationClient implements CatalogReservationClient {
                             r.equipmentId(),
                             r.equipmentName(),
                             r.quantity(),
-                            r.status()
+                            r.status(),
+                            r.reservationId()
                     ));
                 }
                 return mapped.isEmpty() ? CatalogReservationResult.empty() : CatalogReservationResult.available(mapped);

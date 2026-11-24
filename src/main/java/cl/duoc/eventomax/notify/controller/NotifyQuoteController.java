@@ -26,6 +26,10 @@ public class NotifyQuoteController {
 
     private final DocumentStorageService documentStorageService;
     private final Path localQuotesDir;
+    @Autowired(required = false)
+    private cl.duoc.eventomax.notify.closure.ClosureStore closureStore;
+    @Value("${eventomax.notify.closure.max-pdf-bytes:10000000}")
+    private int closureMaxPdfBytes = 10_000_000;
 
     public NotifyQuoteController(
             @Autowired(required = false) DocumentStorageService documentStorageService,
@@ -36,6 +40,22 @@ public class NotifyQuoteController {
 
     @GetMapping(value = "/{productionId}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<byte[]> getQuotePdf(@PathVariable Long productionId) {
+        if (closureStore != null) {
+            var registered = closureStore.document(productionId);
+            if (registered.isPresent()) {
+                var doc = registered.get();
+                if (!"READY".equals(doc.state())) return ResponseEntity.notFound().build();
+                try {
+                    byte[] bytes = documentStorageService.retrieveDocumentExact(
+                            cl.duoc.eventomax.notify.closure.ClosureWorker.CATEGORY, doc.key());
+                    cl.duoc.eventomax.notify.closure.ClosurePdf.verify(bytes, productionId, doc.id(), doc.sha(), doc.size(), closureMaxPdfBytes);
+                    return createPdfResponse(productionId, bytes);
+                } catch (RuntimeException ex) {
+                    log.warn("CLOSURE_DOWNLOAD_VERIFICATION_FAILED productionId={}", productionId);
+                    return ResponseEntity.status(503).build();
+                }
+            }
+        }
         String filename = "quote-production-" + productionId + "-latest.pdf";
 
         // 1. Intentar mediante DocumentStorageService si está disponible

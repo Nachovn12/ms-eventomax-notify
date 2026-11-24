@@ -35,6 +35,10 @@ public class QuoteCommandListener {
     private final QuoteNotificationService quoteNotificationService;
     private final ProcessedEventStore processedEventStore;
     private final RetryTemplate retryTemplate;
+    private cl.duoc.eventomax.notify.closure.ClosureStore closureStore;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setClosureStore(cl.duoc.eventomax.notify.closure.ClosureStore store) { this.closureStore = store; }
 
     public QuoteCommandListener(ObjectMapper objectMapper,
                                 QuoteNotificationService quoteNotificationService,
@@ -80,6 +84,12 @@ public class QuoteCommandListener {
                     return;
                 }
 
+                if (closureStore != null) {
+                    retryTemplate.execute(context -> { closureStore.acceptDocument(envelope); return null; });
+                    // Only durable intent is ACKed here. Generation/storage happen outside this consumer.
+                    channel.basicAck(deliveryTag, false);
+                    return;
+                }
                 boolean processed = processedEventStore.processOnce(
                         envelope.eventId(),
                         () -> retryTemplate.execute((RetryCallback<Void, RuntimeException>) context -> {
@@ -110,7 +120,7 @@ public class QuoteCommandListener {
             }
 
         } catch (Exception e) {
-            log.error("Error procesando mensaje de q.cmd.quote tras agotar intentos o deserializar, enviando a DLQ", e);
+            log.error("Error procesando q.cmd.quote, enviando a DLQ: type={}", e.getClass().getSimpleName());
             try {
                 channel.basicNack(deliveryTag, false, false);
             } catch (Exception nackEx) {

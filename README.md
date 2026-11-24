@@ -86,7 +86,7 @@ flowchart TB
 | :--- | :--- | :--- |
 | `DB_URL` / `DB_USER` / `DB_PASSWORD` | `jdbc:postgresql://<HOST>:5432/postgres?currentSchema=notify` | Conexión PostgreSQL / RDS |
 | `SPRING_RABBITMQ_ADDRESSES` | `rabbitmq-1:5672,rabbitmq-2:5672` | Nodos AMQP del clúster RabbitMQ |
-| `CATALOG_BASE_URL` | `http://ms-eventomax-catalog:8080` | URL interna para consulta de catálogo en actas |
+| `CATALOG_BASE_URL` | `http://ms-eventomax-catalog:8080` | URL canónica de Catalog; `CATALOG_SERVICE_URL` se mantiene como alias de menor precedencia |
 | `EVENTOMAX_NOTIFY_EMAIL_PROVIDER` | `smtp` o `logging` | Proveedor de correo saliente (`SmtpEmailSender` / `LoggingEmailSender`) |
 | `EVENTOMAX_NOTIFY_QUOTE_PROVIDER` | `enterprise` | Generador OpenPDF empresarial (`OpenPdfClosureDocumentGenerator`) |
 | `STORAGE_PROVIDER` / `STORAGE_LOCAL_BASE_DIR` | `local` (`/data/quotes`) o `s3` | Persistencia local en volumen o bucket S3 |
@@ -98,4 +98,37 @@ flowchart TB
 
 # Despliegue Docker (mem_limit: 640m)
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+```
+
+### Correcciones Notify 2A
+
+La consulta documental usa `GET /api/catalog/reservations/production/{productionId}`.
+Solo `200` con `[]` confirma una consulta sin reservas; `401/403` se distinguen de
+indisponibilidad, y `404`, respuestas inválidas y timeouts no se convierten en inventario vacío.
+Los estados recibidos se conservan, sin sustituir un estado ausente por `RESERVED`.
+
+El destinatario debe venir de la resolución de contacto autorizado de Productions.
+`NOTIFY_DEFAULT_RECIPIENT` y `eventomax.notify.mail.default-recipient` ya no habilitan
+un destinatario de respaldo. SMTP bloquea el envío si el comando no trae contacto.
+El proveedor logging sigue siendo una simulación, sin enviar correos.
+
+La inspección previa de EC2 está en [NOTIFY-2A-READONLY-EC2.md](docs/NOTIFY-2A-READONLY-EC2.md).
+Esta fase no cambia ACK, idempotencia SMTP, migraciones ni coordinación correo/PDF.
+
+### Coordinación durable Notify 2B
+
+Los comandos de cierre se confirman después de persistir Inbox e intención. El worker
+genera el acta empresarial en una key inmutable, verifica identidad y checksum y adjunta
+esos bytes exactos. Un resultado SMTP ambiguo queda UNKNOWN sin reenvío automático.
+CONFIRMADO y EN_MONTAJE conservan su flujo anterior. La descarga existente consulta el
+registro durable y mantiene acceso a documentos históricos sin registro nuevo.
+
+`NOTIFY_CLOSURE_DISPATCH_ENABLED=false` mantiene el despacho durable pausado por defecto.
+La migración V2 es aditiva y se incluye para revisión; no se ejecutó en producción.
+Consultar [diseño y activación/rollback](docs/NOTIFY-2B-DESIGN.md) y
+[validación local](docs/NOTIFY-2B-VALIDATION.md) antes de autorizar cualquier despliegue.
+
+```bash
+# Docker local requerido. Incluye regresión y broker/base efímeros; nunca usar producción.
+./mvnw -B -ntp '-Dtest=*Test,*Tests,EmailRetryRabbitIT' verify
 ```

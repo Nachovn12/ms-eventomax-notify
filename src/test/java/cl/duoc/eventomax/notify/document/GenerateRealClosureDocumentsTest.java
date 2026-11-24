@@ -28,9 +28,9 @@ class GenerateRealClosureDocumentsTest {
 
     private final OpenPdfClosureDocumentGenerator generator = new OpenPdfClosureDocumentGenerator();
 
-    private final Path quotesDir = Path.of("..", ".local-cert", "quotes").toAbsolutePath().normalize();
+    private final Path quotesDir = Path.of("target", "test-output", "realistic-fixtures", "quotes").toAbsolutePath().normalize();
     private final Path nestedQuotesDir = quotesDir.resolve("quotes");
-    private final Path artifactDir = Path.of("C:\\Users\\Nacho\\.gemini\\antigravity\\brain\\5e0f0167-5025-4419-8ed1-9717cb4b66f2");
+    private final Path artifactDir = Path.of("target", "test-output", "realistic-fixtures", "previews").toAbsolutePath().normalize();
 
     private static final AdministrativeDeclarationDTO COMMON_ADMIN_DECL = new AdministrativeDeclarationDTO(
             "La producción ha alcanzado su estado terminal CERRADO. Los recursos han sido consolidados administrativamente.",
@@ -252,18 +252,20 @@ class GenerateRealClosureDocumentsTest {
         Files.write(dest1, pdfBytes);
         Files.write(dest2, pdfBytes);
 
-        // Validar que se ajusta a 1 página A4
+        // Validar que genera Diseño C en 2 páginas A4 (P1 Acta Ejecutiva + P2 Anexo Técnico)
         PdfReader reader = new PdfReader(pdfBytes);
-        assertEquals(1, reader.getNumberOfPages(), "El acta de cierre de producción #" + prodId + " debe ajustarse a 1 página A4");
+        assertEquals(2, reader.getNumberOfPages(), "El acta Diseño C de producción #" + prodId + " debe ajustarse a 2 páginas A4 (Ejecutiva + Anexo)");
         reader.close();
 
-        // Renderizar PNG para verificación visual en artifacts
+        // Renderizar PNGs para verificación visual en target/test-output
         try (PDDocument pdDoc = Loader.loadPDF(pdfBytes)) {
             PDFRenderer renderer = new PDFRenderer(pdDoc);
-            BufferedImage image = renderer.renderImageWithDPI(0, 200f, ImageType.RGB);
-            File pngArtifact = artifactDir.resolve("acta_cierre_prod_" + prodId + "_realistic.png").toFile();
-            ImageIO.write(image, "PNG", pngArtifact);
-            assertTrue(pngArtifact.exists());
+            for (int page = 0; page < pdDoc.getNumberOfPages(); page++) {
+                BufferedImage image = renderer.renderImageWithDPI(page, 160f, ImageType.RGB);
+                File pngArtifact = artifactDir.resolve("acta_cierre_prod_" + prodId + "_p" + (page + 1) + ".png").toFile();
+                ImageIO.write(image, "PNG", pngArtifact);
+                assertTrue(pngArtifact.exists());
+            }
         }
     }
 }

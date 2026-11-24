@@ -19,5 +19,12 @@ spring:
 
 eventomax:
   notify:
+    closure:
+      enabled: false
+    storage:
+      local:
+        base-dir: ./target/test-context-storage
+    quote:
+      output-dir: ./target/test-context-quotes
     catalog:
       enabled: false

@@ -33,6 +33,10 @@ public class EmailCommandListener {
     private final EmailNotificationService emailNotificationService;
     private final ProcessedEventStore processedEventStore;
     private final RetryTemplate retryTemplate;
+    private cl.duoc.eventomax.notify.closure.ClosureStore closureStore;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setClosureStore(cl.duoc.eventomax.notify.closure.ClosureStore store) { this.closureStore = store; }
 
     public EmailCommandListener(ObjectMapper objectMapper,
                                 EmailNotificationService emailNotificationService,
@@ -75,7 +79,13 @@ public class EmailCommandListener {
                     return;
                 }
 
-                // 5. & 6. & 7. Procesar con idempotencia atómica y reintentos controlados
+                if ("CERRADO".equalsIgnoreCase(envelope.payload().status()) && closureStore != null) {
+                    retryTemplate.execute(context -> { closureStore.acceptEmail(envelope); return null; });
+                    // acceptEmail uses REQUIRES_NEW and returns only after commit, including duplicate commands.
+                    channel.basicAck(deliveryTag, false);
+                    return;
+                }
+                // Existing CONFIRMADO/EN_MONTAJE behavior is unchanged.
                 boolean processed = processedEventStore.processOnce(
                         envelope.eventId(),
                         () -> retryTemplate.execute((RetryCallback<Void, RuntimeException>) context -> {
@@ -105,7 +115,7 @@ public class EmailCommandListener {
 
         } catch (Exception e) {
             // Error de deserialización u otro error no recuperable
-            log.error("Error procesando mensaje de q.cmd.email, enviando a DLQ", e);
+            log.error("Error procesando q.cmd.email, enviando a DLQ: type={}", e.getClass().getSimpleName());
             try {
                 channel.basicNack(deliveryTag, false, false);
             } catch (Exception nackEx) {

@@ -29,6 +29,7 @@ spring:
       simple:
         acknowledge-mode: manual
         default-requeue-rejected: false
+        auto-startup: ${SPRING_RABBITMQ_LISTENER_SIMPLE_AUTO_STARTUP:true}
   mail:
     host: ${SPRING_MAIL_HOST:${SMTP_HOST:127.0.0.1}}
     port: ${SPRING_MAIL_PORT:${SMTP_PORT:1025}}
@@ -63,6 +64,16 @@ server:
 
 eventomax:
   notify:
+    closure:
+      enabled: ${NOTIFY_CLOSURE_ENABLED:true}
+      worker-enabled: ${NOTIFY_CLOSURE_WORKER_ENABLED:false}
+      generation-enabled: ${NOTIFY_CLOSURE_GENERATION_ENABLED:true}
+      dispatch-enabled: ${NOTIFY_CLOSURE_DISPATCH_ENABLED:false}
+      authorized-productions: ${NOTIFY_CLOSURE_AUTHORIZED_PRODUCTIONS:}
+      lease: ${NOTIFY_CLOSURE_LEASE:2m}
+      document-wait: ${NOTIFY_CLOSURE_DOCUMENT_WAIT:15m}
+      max-attempts: ${NOTIFY_CLOSURE_MAX_ATTEMPTS:5}
+      max-pdf-bytes: ${NOTIFY_CLOSURE_MAX_PDF_BYTES:10000000}
     email:
       provider: ${EVENTOMAX_NOTIFY_EMAIL_PROVIDER:smtp}
     crew:
@@ -73,14 +84,16 @@ eventomax:
     mail:
       from: ${NOTIFY_MAIL_FROM:no-reply@eventomax.cl}
       from-name: ${NOTIFY_MAIL_FROM_NAME:EventoMax Notificaciones}
-      default-recipient: ${NOTIFY_DEFAULT_RECIPIENT:}
-      portal-url: ${NOTIFY_PORTAL_URL:http://localhost:4200/productions}
+      portal-url: ${NOTIFY_PORTAL_URL:}
+      portal-allowed-hosts: ${NOTIFY_PORTAL_ALLOWED_HOSTS:}
+      # Enable only after documented authentication/ownership E2E approval.
+      portal-e2e-approved: ${NOTIFY_PORTAL_E2E_APPROVED:false}
     quote:
       provider: ${EVENTOMAX_NOTIFY_QUOTE_PROVIDER:enterprise}
       output-dir: ${NOTIFY_QUOTE_OUTPUT_DIR:./data/quotes}
     catalog:
       enabled: ${NOTIFY_CATALOG_ENABLED:true}
-      base-url: ${CATALOG_SERVICE_URL:http://localhost:8081}
+      base-url: ${CATALOG_BASE_URL:${CATALOG_SERVICE_URL:http://localhost:8081}}
       timeout-ms: ${NOTIFY_CATALOG_TIMEOUT_MS:1500}
     storage:
       provider: ${STORAGE_PROVIDER:local}

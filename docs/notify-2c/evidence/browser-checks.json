@@ -1,0 +1,69 @@
+{
+  "engine": "158.0.4370.33",
+  "note": "Chromium preview only; not Gmail or Outlook certification",
+  "checks": [
+    {
+      "state": "confirmado",
+      "width": 800,
+      "overflow": false,
+      "logoLoaded": true,
+      "title": "Tu producción está confirmada",
+      "ctaCount": 0,
+      "utf8Valid": true
+    },
+    {
+      "state": "confirmado",
+      "width": 390,
+      "overflow": false,
+      "logoLoaded": true,
+      "title": "Tu producción está confirmada",
+      "ctaCount": 0,
+      "utf8Valid": true
+    },
+    {
+      "state": "en_montaje",
+      "width": 800,
+      "overflow": false,
+      "logoLoaded": true,
+      "title": "El montaje está en curso",
+      "ctaCount": 0,
+      "utf8Valid": true
+    },
+    {
+      "state": "en_montaje",
+      "width": 390,
+      "overflow": false,
+      "logoLoaded": true,
+      "title": "El montaje está en curso",
+      "ctaCount": 0,
+      "utf8Valid": true
+    },
+    {
+      "state": "cerrado",
+      "width": 800,
+      "overflow": false,
+      "logoLoaded": true,
+      "title": "Tu producción ha sido cerrada",
+      "ctaCount": 0,
+      "utf8Valid": true
+    },
+    {
+      "state": "cerrado",
+      "width": 390,
+      "overflow": false,
+      "logoLoaded": true,
+      "title": "Tu producción ha sido cerrada",
+      "ctaCount": 0,
+      "utf8Valid": true
+    },
+    {
+      "case": "images-blocked",
+      "logoBlocked": true,
+      "brandVisible": true
+    },
+    {
+      "case": "css-zoom200",
+      "overflow": false
+    }
+  ]
+}

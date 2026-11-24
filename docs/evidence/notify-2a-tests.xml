@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites tests="119" failures="0" errors="0" skipped="0">
+  <testsuite name="cl.duoc.eventomax.notify.client.catalog.CatalogConfigurationTest" tests="4" failures="0" errors="0" skipped="0" time="1.311">
+    <testcase name="developmentDefaultIsPreserved" classname="cl.duoc.eventomax.notify.client.catalog.CatalogConfigurationTest" time="1.229" />
+    <testcase name="explicitSpringPropertyWinsOverAliases" classname="cl.duoc.eventomax.notify.client.catalog.CatalogConfigurationTest" time="0.018" />
+    <testcase name="canonicalEnvironmentVariableWinsOverLegacyAlias" classname="cl.duoc.eventomax.notify.client.catalog.CatalogConfigurationTest" time="0.015" />
+    <testcase name="legacyAliasRemainsSupported" classname="cl.duoc.eventomax.notify.client.catalog.CatalogConfigurationTest" time="0.013" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" tests="21" failures="0" errors="0" skipped="0" time="0.696">
+    <testcase name="malformedSuccessDoesNotMeanEmpty(String)[1]" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.188" />
+    <testcase name="malformedSuccessDoesNotMeanEmpty(String)[2]" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.016" />
+    <testcase name="malformedSuccessDoesNotMeanEmpty(String)[3]" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.015" />
+    <testcase name="malformedSuccessDoesNotMeanEmpty(String)[4]" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.011" />
+    <testcase name="malformedSuccessDoesNotMeanEmpty(String)[5]" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.013" />
+    <testcase name="malformedSuccessDoesNotMeanEmpty(String)[6]" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.021" />
+    <testcase name="propagatesTraceHeadersOnTheRealEndpoint" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.023" />
+    <testcase name="preservesReleasedAndMissingStatusWithoutInventingActiveReservation" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.019" />
+    <testcase name="timeoutIsUnavailableAndHasNoRemoteDetails" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.213" />
+    <testcase name="unexpectedHttpStatusDoesNotMeanNoReservations(int)[1]" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.011" />
+    <testcase name="unexpectedHttpStatusDoesNotMeanNoReservations(int)[2]" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.01" />
+    <testcase name="unexpectedHttpStatusDoesNotMeanNoReservations(int)[3]" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.01" />
+    <testcase name="unexpectedHttpStatusDoesNotMeanNoReservations(int)[4]" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.008" />
+    <testcase name="unexpectedHttpStatusDoesNotMeanNoReservations(int)[5]" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.009" />
+    <testcase name="unexpectedHttpStatusDoesNotMeanNoReservations(int)[6]" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.009" />
+    <testcase name="getReservationsForProduction_whenEmptyArray_returnsEmpty" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.01" />
+    <testcase name="disabledAndInvalidIdDoNotConsultCatalog" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.003" />
+    <testcase name="getReservationsForProduction_whenConnectionRefused_returnsUnavailable" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.006" />
+    <testcase name="getReservationsForProduction_whenItemsExist_returnsAvailable" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.01" />
+    <testcase name="unauthorizedIsDistinctFromEmpty(int)[1]" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.007" />
+    <testcase name="unauthorizedIsDistinctFromEmpty(int)[2]" classname="cl.duoc.eventomax.notify.client.catalog.RestCatalogReservationClientTest" time="0.008" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.controller.NotifyQuoteControllerTest" tests="2" failures="0" errors="0" skipped="0" time="1.376">
+    <testcase name="getQuotePdf_notFound" classname="cl.duoc.eventomax.notify.controller.NotifyQuoteControllerTest" time="1.355" />
+    <testcase name="getQuotePdf_foundInStorage" classname="cl.duoc.eventomax.notify.controller.NotifyQuoteControllerTest" time="0.019" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.controller.NotifyTicketControllerTest" tests="2" failures="0" errors="0" skipped="0" time="0.299">
+    <testcase name="getTicketByProductionId_notFound" classname="cl.duoc.eventomax.notify.controller.NotifyTicketControllerTest" time="0.194" />
+    <testcase name="getTicketByProductionId_found" classname="cl.duoc.eventomax.notify.controller.NotifyTicketControllerTest" time="0.102" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.document.CatalogClosureDocumentIntegrationTest" tests="5" failures="0" errors="0" skipped="0" time="1.504">
+    <testcase name="missingInventoryRendersPreciseStateWithoutInventedEquipment(String, String)[1]" classname="cl.duoc.eventomax.notify.document.CatalogClosureDocumentIntegrationTest" time="0.893" />
+    <testcase name="missingInventoryRendersPreciseStateWithoutInventedEquipment(String, String)[2]" classname="cl.duoc.eventomax.notify.document.CatalogClosureDocumentIntegrationTest" time="0.128" />
+    <testcase name="missingInventoryRendersPreciseStateWithoutInventedEquipment(String, String)[3]" classname="cl.duoc.eventomax.notify.document.CatalogClosureDocumentIntegrationTest" time="0.117" />
+    <testcase name="missingInventoryRendersPreciseStateWithoutInventedEquipment(String, String)[4]" classname="cl.duoc.eventomax.notify.document.CatalogClosureDocumentIntegrationTest" time="0.124" />
+    <testcase name="knownReservationTravelsFromHttpContractToStoredPdf(Path)" classname="cl.duoc.eventomax.notify.document.CatalogClosureDocumentIntegrationTest" time="0.214" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.document.OpenPdfClosureDocumentGeneratorTest" tests="4" failures="0" errors="0" skipped="0" time="1.304">
+    <testcase name="testGeneratePdfProduction1Real" classname="cl.duoc.eventomax.notify.document.OpenPdfClosureDocumentGeneratorTest" time="0.908" />
+    <testcase name="testNullOptionalFieldsTolerance" classname="cl.duoc.eventomax.notify.document.OpenPdfClosureDocumentGeneratorTest" time="0.106" />
+    <testcase name="testProductionWithoutPreviewBanner" classname="cl.duoc.eventomax.notify.document.OpenPdfClosureDocumentGeneratorTest" time="0.118" />
+    <testcase name="testMultiPageDocumentPagination" classname="cl.duoc.eventomax.notify.document.OpenPdfClosureDocumentGeneratorTest" time="0.17" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" tests="26" failures="0" errors="0" skipped="0" time="0.241">
+    <testcase name="test2_buildFromLegacy7FieldsPayload_success" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.045" />
+    <testcase name="test16_historicTimestampAbsent_preservedAsNull" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.003" />
+    <testcase name="test21_twoDistinctProductions_isolatedNoContamination" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.012" />
+    <testcase name="test24_compatibilityWithOpenPdfClosureDocumentGenerator" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.099" />
+    <testcase name="test17_timelineUnordered_sortedChronologically" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.003" />
+    <testcase name="test23_dtoIntegrityAndImmutability" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.002" />
+    <testcase name="test15c_offsetClosedAt_formattedCorrectly" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.002" />
+    <testcase name="test8_catalogClientAvailableWithReservations_mappedCorrectly" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.002" />
+    <testcase name="test11_catalogInformationNotProvided_mapsToNull" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.002" />
+    <testcase name="test19_distinctEventIdsTraceability" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.002" />
+    <testcase name="test9_catalogClientConfirmsZeroReservations_mapsToEmptyList" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.002" />
+    <testcase name="test20_invalidProductionIdOrStatus_throwsExpectedException" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.004" />
+    <testcase name="test14_timestampsInstant_handledInUtc" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.002" />
+    <testcase name="test13_serviceUnitPriceNull_preservedAsNull" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.001" />
+    <testcase name="test7_crewTicketNotFound_mapsToNull" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.002" />
+    <testcase name="test4_optionalFieldsAbsent_fallbackGracefully" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.002" />
+    <testcase name="test6_crewTicketAvailable_mappedCorrectly" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.001" />
+    <testcase name="test15b_localClosedAtWithoutZone_formattedWithoutUtcSuffix" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.002" />
+    <testcase name="test15_utcClosedAtEndingInZ_formattedWithExplicitUtcSuffix" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.001" />
+    <testcase name="test12_serviceUnitPrice175WithoutCurrency_preservedExact" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.004" />
+    <testcase name="test1_buildFromEnrichedPayload_success" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.002" />
+    <testcase name="test22_noPiiInExceptionsOrLogging" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.002" />
+    <testcase name="test18_timelineIncomplete_noFabrication" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.002" />
+    <testcase name="test3_jacksonSerializationDeserialization_matchesContract" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.025" />
+    <testcase name="test10_catalogClientUnavailableTimeout_mapsToUnavailableRecord" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.002" />
+    <testcase name="test5_contactWithNullNameAndPhone_preservesNulls" classname="cl.duoc.eventomax.notify.document.ProductionClosureDocumentBuilderTest" time="0.002" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.idempotency.InMemoryProcessedEventStoreTest" tests="7" failures="0" errors="0" skipped="0" time="0.029">
+    <testcase name="isProcessed_initiallyFalse" classname="cl.duoc.eventomax.notify.idempotency.InMemoryProcessedEventStoreTest" time="0.002" />
+    <testcase name="processOnce_returnsFalseIfDuplicate" classname="cl.duoc.eventomax.notify.idempotency.InMemoryProcessedEventStoreTest" time="0.001" />
+    <testcase name="markAsProcessed_thenIsProcessed" classname="cl.duoc.eventomax.notify.idempotency.InMemoryProcessedEventStoreTest" time="0.001" />
+    <testcase name="threadSafety_processOnce_isAtomic" classname="cl.duoc.eventomax.notify.idempotency.InMemoryProcessedEventStoreTest" time="0.016" />
+    <testcase name="differentEvents_areIndependent" classname="cl.duoc.eventomax.notify.idempotency.InMemoryProcessedEventStoreTest" time="0.001" />
+    <testcase name="processOnce_executesAndReturnsTrue" classname="cl.duoc.eventomax.notify.idempotency.InMemoryProcessedEventStoreTest" time="0.002" />
+    <testcase name="processOnce_propagatesExceptionAndDoesNotMark" classname="cl.duoc.eventomax.notify.idempotency.InMemoryProcessedEventStoreTest" time="0.002" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.messaging.crew.CrewCommandListenerTest" tests="7" failures="0" errors="0" skipped="0" time="0.661">
+    <testcase name="validMessage_shouldProcessAndAck" classname="cl.duoc.eventomax.notify.messaging.crew.CrewCommandListenerTest" time="0.536" />
+    <testcase name="invalidEnvelope_emptyEventId_shouldNack" classname="cl.duoc.eventomax.notify.messaging.crew.CrewCommandListenerTest" time="0.015" />
+    <testcase name="serviceError_fails3Times_shouldNackWithoutMarkingProcessed" classname="cl.duoc.eventomax.notify.messaging.crew.CrewCommandListenerTest" time="0.031" />
+    <testcase name="duplicateMessage_shouldAckWithoutProcessing" classname="cl.duoc.eventomax.notify.messaging.crew.CrewCommandListenerTest" time="0.014" />
+    <testcase name="invalidType_shouldNack" classname="cl.duoc.eventomax.notify.messaging.crew.CrewCommandListenerTest" time="0.016" />
+    <testcase name="invalidEnvelope_nullPayload_shouldNack" classname="cl.duoc.eventomax.notify.messaging.crew.CrewCommandListenerTest" time="0.01" />
+    <testcase name="serviceError_fails2TimesThenSucceeds_shouldAck" classname="cl.duoc.eventomax.notify.messaging.crew.CrewCommandListenerTest" time="0.023" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.messaging.email.EmailCommandListenerTest" tests="7" failures="0" errors="0" skipped="0" time="0.225">
+    <testcase name="validMessage_shouldProcessAndAck" classname="cl.duoc.eventomax.notify.messaging.email.EmailCommandListenerTest" time="0.101" />
+    <testcase name="invalidEnvelope_emptyEventId_shouldNack" classname="cl.duoc.eventomax.notify.messaging.email.EmailCommandListenerTest" time="0.023" />
+    <testcase name="serviceError_fails3Times_shouldNackWithoutMarkingProcessed" classname="cl.duoc.eventomax.notify.messaging.email.EmailCommandListenerTest" time="0.025" />
+    <testcase name="duplicateMessage_shouldAckWithoutProcessing" classname="cl.duoc.eventomax.notify.messaging.email.EmailCommandListenerTest" time="0.015" />
+    <testcase name="invalidType_shouldNack" classname="cl.duoc.eventomax.notify.messaging.email.EmailCommandListenerTest" time="0.016" />
+    <testcase name="invalidEnvelope_nullPayload_shouldNack" classname="cl.duoc.eventomax.notify.messaging.email.EmailCommandListenerTest" time="0.011" />
+    <testcase name="serviceError_fails2TimesThenSucceeds_shouldAck" classname="cl.duoc.eventomax.notify.messaging.email.EmailCommandListenerTest" time="0.023" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.messaging.quote.QuoteCommandCrossContractTest" tests="3" failures="0" errors="0" skipped="0" time="0.055">
+    <testcase name="test2_legacySevenFieldJson_deserializedAccurately" classname="cl.duoc.eventomax.notify.messaging.quote.QuoteCommandCrossContractTest" time="0.012" />
+    <testcase name="test1_enrichedJsonFromProductions_deserializedAccurately" classname="cl.duoc.eventomax.notify.messaging.quote.QuoteCommandCrossContractTest" time="0.017" />
+    <testcase name="test3_unknownFieldsIgnoredGracefully" classname="cl.duoc.eventomax.notify.messaging.quote.QuoteCommandCrossContractTest" time="0.021" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.messaging.quote.QuoteCommandListenerTest" tests="6" failures="0" errors="0" skipped="0" time="0.264">
+    <testcase name="validMessage_shouldProcessAndAck" classname="cl.duoc.eventomax.notify.messaging.quote.QuoteCommandListenerTest" time="0.143" />
+    <testcase name="serviceError_fails2TimesThenSucceedsOnThirdAttempt_shouldAck" classname="cl.duoc.eventomax.notify.messaging.quote.QuoteCommandListenerTest" time="0.035" />
+    <testcase name="invalidPayload_missingFields_shouldNackWithoutRequeue" classname="cl.duoc.eventomax.notify.messaging.quote.QuoteCommandListenerTest" time="0.022" />
+    <testcase name="invalidType_shouldNackWithoutRequeue" classname="cl.duoc.eventomax.notify.messaging.quote.QuoteCommandListenerTest" time="0.019" />
+    <testcase name="duplicateMessage_shouldAckWithoutProcessing" classname="cl.duoc.eventomax.notify.messaging.quote.QuoteCommandListenerTest" time="0.015" />
+    <testcase name="serviceError_fails3AttemptsTotal_shouldNackWithoutRequeue" classname="cl.duoc.eventomax.notify.messaging.quote.QuoteCommandListenerTest" time="0.023" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.sender.DatabaseCrewTicketSenderTest" tests="3" failures="0" errors="0" skipped="0" time="0.121">
+    <testcase name="send_nullPayload_shouldThrow" classname="cl.duoc.eventomax.notify.sender.DatabaseCrewTicketSenderTest" time="0.102" />
+    <testcase name="send_newTicket_shouldSaveTicketAndAudit" classname="cl.duoc.eventomax.notify.sender.DatabaseCrewTicketSenderTest" time="0.012" />
+    <testcase name="send_existingTicket_shouldUpdate" classname="cl.duoc.eventomax.notify.sender.DatabaseCrewTicketSenderTest" time="0.005" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.sender.LoggingCrewTicketSenderTest" tests="1" failures="0" errors="0" skipped="0" time="0.004">
+    <testcase name="send_shouldNotThrowException" classname="cl.duoc.eventomax.notify.sender.LoggingCrewTicketSenderTest" time="0.003" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.sender.LoggingEmailSenderTest" tests="1" failures="0" errors="0" skipped="0" time="0.004">
+    <testcase name="send_doesNotThrow" classname="cl.duoc.eventomax.notify.sender.LoggingEmailSenderTest" time="0.003" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.sender.PdfQuoteGeneratorTest" tests="2" failures="0" errors="0" skipped="0" time="0.042">
+    <testcase name="generate_shouldCreateRealPdfWithProductionDataAndNoInventedFinancials" classname="cl.duoc.eventomax.notify.sender.PdfQuoteGeneratorTest" time="0.036" />
+    <testcase name="generate_invalidInput_shouldThrowException" classname="cl.duoc.eventomax.notify.sender.PdfQuoteGeneratorTest" time="0.005" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.sender.SmtpEmailSenderTest" tests="8" failures="0" errors="0" skipped="0" time="0.458">
+    <testcase name="legacyDefaultRecipientPropertyCannotRestoreUnsafeFallback" classname="cl.duoc.eventomax.notify.sender.SmtpEmailSenderTest" time="0.146" />
+    <testcase name="rendersDirectDownloadDeepLinkAndAttachesClosurePdfWhenStatusIsCerrado" classname="cl.duoc.eventomax.notify.sender.SmtpEmailSenderTest" time="0.149" />
+    <testcase name="rendersBoardingPassTemplateWithDeepLinkToCrewTicketForEnMontaje" classname="cl.duoc.eventomax.notify.sender.SmtpEmailSenderTest" time="0.037" />
+    <testcase name="escapesHtmlSpecialCharactersAndHandlesMissingDateSafely" classname="cl.duoc.eventomax.notify.sender.SmtpEmailSenderTest" time="0.039" />
+    <testcase name="missingAuthorizedRecipientIsBlockedBeforeSmtp(String)[1]" classname="cl.duoc.eventomax.notify.sender.SmtpEmailSenderTest" time="0.017" />
+    <testcase name="missingAuthorizedRecipientIsBlockedBeforeSmtp(String)[2]" classname="cl.duoc.eventomax.notify.sender.SmtpEmailSenderTest" time="0.014" />
+    <testcase name="missingAuthorizedRecipientIsBlockedBeforeSmtp(String)[3]" classname="cl.duoc.eventomax.notify.sender.SmtpEmailSenderTest" time="0.017" />
+    <testcase name="missingAuthorizedRecipientIsBlockedBeforeSmtp(String)[4]" classname="cl.duoc.eventomax.notify.sender.SmtpEmailSenderTest" time="0.013" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.service.CrewTicketNotificationServiceTest" tests="1" failures="0" errors="0" skipped="0" time="0.073">
+    <testcase name="processCrewTicket_shouldDelegateToSender" classname="cl.duoc.eventomax.notify.service.CrewTicketNotificationServiceTest" time="0.07" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.service.EmailNotificationServiceTest" tests="1" failures="0" errors="0" skipped="0" time="0.081">
+    <testcase name="processEmailNotification_shouldDelegateToSender" classname="cl.duoc.eventomax.notify.service.EmailNotificationServiceTest" time="0.078" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.service.QuoteNotificationServiceTest" tests="6" failures="0" errors="0" skipped="0" time="0.317">
+    <testcase name="processQuoteGeneration_withLegacyGeneratorOnly_shouldDelegateToLegacy" classname="cl.duoc.eventomax.notify.service.QuoteNotificationServiceTest" time="0.208" />
+    <testcase name="processQuoteGeneration_whenBothFail_shouldThrowException(Path)" classname="cl.duoc.eventomax.notify.service.QuoteNotificationServiceTest" time="0.016" />
+    <testcase name="processQuoteGeneration_forProduction1_whenLatestExists_shouldPreserveLatest(Path)" classname="cl.duoc.eventomax.notify.service.QuoteNotificationServiceTest" time="0.042" />
+    <testcase name="processQuoteGeneration_whenProviderIsLegacy_shouldDelegateDirectlyToQuoteGenerator(Path)" classname="cl.duoc.eventomax.notify.service.QuoteNotificationServiceTest" time="0.008" />
+    <testcase name="processQuoteGeneration_whenEnterpriseFails_shouldTriggerFallbackWithWarning(Path)" classname="cl.duoc.eventomax.notify.service.QuoteNotificationServiceTest" time="0.007" />
+    <testcase name="processQuoteGeneration_withEnterpriseComponents_shouldGenerateEnterprisePdf(Path)" classname="cl.duoc.eventomax.notify.service.QuoteNotificationServiceTest" time="0.029" />
+  </testsuite>
+  <testsuite name="cl.duoc.eventomax.notify.storage.LocalFileSystemDocumentStorageServiceTest" tests="2" failures="0" errors="0" skipped="0" time="0.032">
+    <testcase name="storeAndRetrieve_success" classname="cl.duoc.eventomax.notify.storage.LocalFileSystemDocumentStorageServiceTest" time="0.023" />
+    <testcase name="retrieve_notFound_throwsException" classname="cl.duoc.eventomax.notify.storage.LocalFileSystemDocumentStorageServiceTest" time="0.007" />
+  </testsuite>
+</testsuites>
